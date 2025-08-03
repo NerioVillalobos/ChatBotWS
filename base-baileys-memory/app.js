@@ -166,13 +166,13 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
     )
     .addAnswer('Por favor, elige una opción:', { delay: 500 })
     .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta\n3️⃣ Otra Zona', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('fontana') || ctx.body.includes('1️⃣')) {
+        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('Fontana') || ctx.body.includes('1️⃣')) {
             return gotoFlow(flowServicioFontana);
         }
-        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('ibarret') || ctx.body.includes('2️⃣')) { // Se corrigió 'ibarret' a 'ibarra' si era un typo
+        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('Ibarret') || ctx.body.includes('2️⃣')) { // Se corrigió 'ibarret' a 'ibarra' si era un typo
             return gotoFlow(flowServicioIbarra);
         }
-        if (ctx.body.includes('3') || ctx.body.toLowerCase().includes('otra') || ctx.body.includes('3️⃣')) {
+        if (ctx.body.includes('3') || ctx.body.toLowerCase().includes('Otra') || ctx.body.includes('3️⃣')) {
             return gotoFlow(flowOtraZona);
         }
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2 o 3, o los emojis 1️⃣, 2️⃣, 3️⃣).');
