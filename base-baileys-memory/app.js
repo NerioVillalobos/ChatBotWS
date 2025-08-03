@@ -19,71 +19,74 @@ const NUMERO_ADMIN_IBARRETA = '5491140638555@s.whatsapp.net'; // Ejemplo: reempl
 // FLUJOS FINALES / HOJAS DEL ÁRBOL
 // ----------------------------------------------------
 
-// Flujo para "Llama a una persona" (general, usado también para servicio técnico)
-const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas']) // Añadimos 'otras consultas'
+// Flujo para "Llama a una persona"
+const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas'])
     .addAnswer('Perfecto! Lo derivamos con una persona de atención para evacuar sus dudas.')
     .addAnswer('Por favor haga clic en el siguiente link:', null, async (ctx, { flowDynamic }) => {
-        await flowDynamic('📞 https://bit.ly/4l1iOvh'); // Asegúrate de que este link sea el correcto
+        await flowDynamic('📞 https://bit.ly/4l1iOvh');
     })
     .addAnswer('Horario de atención: Lunes a Viernes de 9:00 AM a 6:00 PM.', { delay: 500 })
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?', { delay: 1000 }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-        return fallBack('Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
-    }, [
+    .addAnswer(
+        '¿Hay algo más en lo que pueda ayudarte?',
         {
-            delay: 120000, // 2 minutos
-            keywords: [],
-            async handler(ctx, { flowDynamic, gotoFlow }) {
+            delay: 1000,
+            capture: true,
+            // Aquí definimos el comportamiento de idle
+            idle: 120000, // 2 minutos (120000 milisegundos)
+            // Este 'handleIdle' se ejecutará si el usuario está inactivo
+            handleIdle: async (ctx, { flowDynamic, gotoFlow }) => {
                 await flowDynamic('Parece que no has respondido. ¿Hay algo más en lo que pueda ayudarte? Recuerda que puedes escribir *MENU* para ver las opciones principales.');
+                // Opcional: podrías hacer que el bot vuelva al flujo principal después de este mensaje de inactividad
+                // return gotoFlow(flowPrincipal);
             },
         },
-    ]);
+        // Este es el callback principal para cuando el usuario sí responde (con 'MENU' o cualquier otra cosa)
+        async (ctx, { gotoFlow, fallBack }) => {
+            if (ctx.body.toUpperCase().includes('MENU')) {
+                return gotoFlow(flowPrincipal);
+            }
+            return fallBack('Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+        },
+        // Array de sub-flujos. Si no hay sub-flujos que el usuario pueda activar
+        // específicamente en este `addAnswer`, se deja vacío.
+        // La lógica de idle ya no va aquí.
+        []
+    );
 
 // Flujo para "Informar un Pago"
 const flowInformarPago = addKeyword(['informar_pago', 'ya pague', 'reportar pago'])
     .addAnswer('Para informar tu pago, por favor, envíanos una captura del comprobante de transferencia junto con el nombre y DNI o CUIT del titular del servicio.')
     .addAnswer('En breve verificaremos tu pago y actualizaremos tu estado.', { capture: true }, async (ctx, { gotoFlow, flowDynamic, fallBack, provider }) => {
-        // Verifica si el mensaje contiene archivos (imagen, documento, video)
-        if (ctx.has
-            || ctx.has
-            || ctx.has
-            || ctx.has
-        ) {
+        const adminTargetNumber = NUMERO_ADMIN_FONTANA; // O NUMERO_ADMIN_IBARRETA según la lógica de tu negocio.
+
+        // Determinar si el mensaje contiene media (imagen, documento, video)
+        const isMedia = ctx.message && (ctx.message.image || ctx.message.document || ctx.message.video);
+        const remoteJid = ctx.from; // El ID del remitente original
+
+        if (isMedia) {
             await flowDynamic('¡Muchas gracias!, recibimos su comprobante.');
             await flowDynamic('En breve verificaremos tu pago y actualizaremos el estado de tu servicio.');
 
-            // Lógica para reenviar el mensaje a un número específico (admin de Fontana o Ibarreta)
-            // Necesitamos saber de qué zona viene el usuario para reenviar al número correcto.
-            // Esto es un poco complejo sin un estado persistente del usuario.
-            // Por ahora, asumimos que estamos en el flujo de Fontana y lo enviamos a Fontana.
-            // Para una solución más robusta, deberíamos guardar la "zona" del usuario en la base de datos (DBAdapter).
-
-            // TEMPORAL: Reenviaremos al número de Fontana por defecto para el ejemplo.
-            // En una aplicación real, usarías el estado del usuario (desde la DB)
-            // para saber a qué número reenviar (Fontana o Ibarreta).
             try {
                 // Obtener el tipo de mensaje original para reenviarlo correctamente
-                const type = ctx.message.image ? 'image' : ctx.message.document ? 'document' : ctx.message.video ? 'video' : 'text';
-                const remoteJid = ctx.from; // El ID del remitente original
-
-                let adminTargetNumber;
-                // Esto es una simplificación. Idealmente, la zona se guardaría en la DB del usuario.
-                // Para este ejemplo, lo enviaremos al número de Fontana.
-                // Si necesitas que esto sea dinámico según la zona elegida, tendríamos que
-                // modificar la estructura de almacenamiento de datos del bot.
-                adminTargetNumber = NUMERO_ADMIN_FONTANA; // O NUMERO_ADMIN_IBARRETA, dependiendo del origen del flujo
-
-
-                if (type === 'image' && ctx.message.image) {
-                     await provider.vendor.sendMessage(adminTargetNumber, { image: { url: ctx.message.image.url }, caption: `Comprobante de ${ctx.pushName} (${remoteJid}). DNI/CUIT: ${ctx.body}` });
-                } else if (type === 'document' && ctx.message.document) {
-                     await provider.vendor.sendMessage(adminTargetNumber, { document: { url: ctx.message.document.url }, mimetype: ctx.message.document.mimetype, fileName: ctx.message.document.fileName, caption: `Comprobante de ${ctx.pushName} (${remoteJid}). DNI/CUIT: ${ctx.body}` });
-                }
-                // Si es solo texto (el DNI/CUIT que acompañó al archivo)
-                else if (ctx.body) {
-                    await provider.vendor.sendMessage(adminTargetNumber, { text: `Comprobante de ${ctx.pushName} (${remoteJid}). DNI/CUIT/Nombre: ${ctx.body}` });
+                if (ctx.message.image) {
+                    await provider.vendor.sendMessage(adminTargetNumber, {
+                        image: { url: ctx.message.image.url },
+                        caption: `Comprobante (IMG) de ${ctx.pushName} (${remoteJid}). Info: ${ctx.body || 'Sin texto adicional'}`
+                    });
+                } else if (ctx.message.document) {
+                    await provider.vendor.sendMessage(adminTargetNumber, {
+                        document: { url: ctx.message.document.url },
+                        mimetype: ctx.message.document.mimetype,
+                        fileName: ctx.message.document.fileName,
+                        caption: `Comprobante (DOC) de ${ctx.pushName} (${remoteJid}). Info: ${ctx.body || 'Sin texto adicional'}`
+                    });
+                } else if (ctx.message.video) {
+                    // Si el cliente puede enviar videos como comprobante, manejarlo también
+                    await provider.vendor.sendMessage(adminTargetNumber, {
+                        video: { url: ctx.message.video.url },
+                        caption: `Comprobante (VIDEO) de ${ctx.pushName} (${remoteJid}). Info: ${ctx.body || 'Sin texto adicional'}`
+                    });
                 }
                 console.log(`Comprobante reenviado a ${adminTargetNumber}`);
 
@@ -93,9 +96,18 @@ const flowInformarPago = addKeyword(['informar_pago', 'ya pague', 'reportar pago
             }
 
             return gotoFlow(flowPrincipal); // Vuelve al menú principal después de procesar
-        } else {
-            // Si el usuario no envió un archivo
-            return fallBack('Por favor, envía una *captura o archivo* de tu comprobante junto con el nombre y DNI o CUIT. Si no tienes el comprobante, puedes escribir *MENU* para volver al inicio.');
+        } else if (ctx.body && ctx.body.length > 0) {
+            // Si el usuario envía solo texto (quizás el DNI/CUIT sin archivo)
+            await flowDynamic('Gracias por la información. Para poder procesar tu pago, por favor, también envíanos una *captura o archivo* del comprobante.');
+            await provider.vendor.sendMessage(adminTargetNumber, {
+                text: `Información de pago recibida de ${ctx.pushName} (${remoteJid}): ${ctx.body}. FALTA COMPROBANTE.`
+            });
+            // No se hace gotoFlow, se espera que envíe el archivo
+            return; // Permanece en el mismo paso esperando el archivo
+        }
+        else {
+            // Si el usuario no envió nada o un mensaje vacío
+            return fallBack('Para informar tu pago, por favor, envía una *captura o archivo* de tu comprobante junto con el nombre y DNI o CUIT. Si no tienes el comprobante, puedes escribir *MENU* para volver al inicio.');
         }
     });
 
