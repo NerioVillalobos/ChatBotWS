@@ -16,20 +16,30 @@ const MockAdapter = require('@bot-whatsapp/database/mock')
 // ----------------------------------------------------
 
 // Flujo para "Llama a una persona"
-const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien']) // Añadimos más keywords para derivación
+const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien'])
     .addAnswer('Para asistencia personalizada, por favor, comunícate con nosotros directamente al siguiente número:')
     .addAnswer('*📞 https://bit.ly/4l1iOvh *', null, async (ctx, { flowDynamic }) => {
-        // Enviar un enlace directo a WhatsApp para que puedan hacer clic
         await flowDynamic('Haz clic aquí para iniciar un chat');
     })
-    .addAnswer('Horario de atención: Lunes a Viernes de 9:00 AM a 6:00 PM.', { delay: 120000 }) // Puedes ajustar este horario
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?')
-    .addAnswer('Escribe *MENU* para volver al inicio.', { capture: true }, async (ctx, { gotoFlow }) => {
+    .addAnswer('Horario de atención: Lunes a Viernes de 9:00 AM a 6:00 PM.', { delay: 500 }) // Ajustamos el delay aquí para que no sea un idle
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?', { delay: 1000 }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
-    });
-    
+        return fallBack('Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+    }, [
+        // Mensaje de re-enganche por inactividad después de 2 minutos
+        {
+            delay: 120000, // 2 minutos (120000 milisegundos)
+            keywords: [],
+            async handler(ctx, { flowDynamic, gotoFlow }) {
+                await flowDynamic('Parece que no has respondido. ¿Hay algo más en lo que pueda ayudarte? Recuerda que puedes escribir *MENU* para ver las opciones principales.');
+                // return gotoFlow(flowPrincipal); // Puedes activar esto si quieres que vuelva al menú principal automáticamente después del idle.
+            },
+        },
+    ]);
+
+
 // Flujo para "Consultar precios de los servicios"
 const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes', 'costo'])
     .addAnswer('Para consultar nuestros planes y precios, visita nuestra página web: [Link a la Página de Precios]')
@@ -55,7 +65,7 @@ const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde 
         return fallBack('Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
     });
 
-// Flujo para "Informar un Pago" (Aquí es donde en Fase 2 conectarías con la DB de deudas)
+// Flujo para "Informar un Pago"
 const flowInformarPago = addKeyword(['informar_pago', 'ya pague', 'reportar pago'])
     .addAnswer('Para informar tu pago, por favor, envíanos una captura del comprobante junto con tu número de cliente o DNI.')
     .addAnswer('En breve verificaremos tu pago y actualizaremos tu estado.')
@@ -88,7 +98,6 @@ const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo interne
 // Flujo para "Atención Administrativa"
 const flowAtencionAdministrativa = addKeyword(['administrativa', 'factura', 'pagos', 'planes', 'administracion'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa?', { delay: 500 })
-    // MODIFICADO: Uso de emojis de números
     .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣')) {
             return gotoFlow(flowInformarPago);
@@ -114,10 +123,9 @@ const flowOtraZona = addKeyword(['otra_zona', 'otro', 'otra', 'mi zona no esta']
         return fallBack('Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
     });
 
-// Flujo para "Servicio de Internet en Ibarra"
-const flowServicioIbarra = addKeyword(['Ibarreta', '2', '2️⃣']) // Se agrega la keyword 2️⃣
+// Flujo para "Servicio de Internet en Ibarreta"
+const flowServicioIbarra = addKeyword(['Ibarreta', '2', '2️⃣'])
     .addAnswer('Entendido, servicio en Ibarreta. ¿Necesitas atención administrativa o soporte técnico?', { delay: 500 })
-    // MODIFICADO: Uso de emojis de números
     .addAnswer('1️⃣ Atención Administrativa\n2️⃣ Servicio Técnico', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('administrativa') || ctx.body.includes('1️⃣')) {
             return gotoFlow(flowAtencionAdministrativa);
@@ -129,9 +137,8 @@ const flowServicioIbarra = addKeyword(['Ibarreta', '2', '2️⃣']) // Se agrega
     });
 
 // Flujo para "Servicio de Internet en Fontana"
-const flowServicioFontana = addKeyword(['fontana', '1', '1️⃣']) // Se agrega la keyword 1️⃣
+const flowServicioFontana = addKeyword(['fontana', '1', '1️⃣'])
     .addAnswer('Perfecto, servicio en Fontana. ¿Necesitas atención administrativa o soporte técnico?', { delay: 500 })
-    // MODIFICADO: Uso de emojis de números
     .addAnswer('1️⃣ Atención Administrativa\n2️⃣ Servicio Técnico', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('administrativa') || ctx.body.includes('1️⃣')) {
             return gotoFlow(flowAtencionAdministrativa);
@@ -148,14 +155,21 @@ const flowServicioFontana = addKeyword(['fontana', '1', '1️⃣']) // Se agrega
 // ----------------------------------------------------
 
 const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas tardes', 'buenas noches', 'menu', EVENTS.WELCOME])
-    .addAnswer('¡Hola! Soy el ChatBot Vanguard. ¿En qué zona necesitas ayuda con tu servicio de internet?', { delay: 500 })
+    .addAnswer(
+        null, // Usamos null para que el mensaje sea generado en el handler
+        null,
+        async (ctx, { flowDynamic }) => {
+            const name = ctx.pushName || 'cliente'; // Obtiene el nombre del usuario o usa 'cliente' por defecto
+            await flowDynamic(`¡Hola ${name}! Soy el ChatBot Vanguard. ¿En qué zona necesitas ayuda con tu servicio de internet?`);
+        },
+        [], // No keywords here, as the message is dynamic
+    )
     .addAnswer('Por favor, elige una opción:', { delay: 500 })
-    // MODIFICADO: Uso de emojis de números
     .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta\n3️⃣ Otra Zona', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('Fontana') || ctx.body.includes('1️⃣')) {
+        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('fontana') || ctx.body.includes('1️⃣')) {
             return gotoFlow(flowServicioFontana);
         }
-        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('Ibarreta') || ctx.body.includes('2️⃣')) {
+        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('ibarret') || ctx.body.includes('2️⃣')) { // Se corrigió 'ibarret' a 'ibarra' si era un typo
             return gotoFlow(flowServicioIbarra);
         }
         if (ctx.body.includes('3') || ctx.body.toLowerCase().includes('otra') || ctx.body.includes('3️⃣')) {
