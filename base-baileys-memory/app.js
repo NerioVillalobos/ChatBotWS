@@ -66,47 +66,36 @@ const flowInformarPago = addKeyword(['informar_pago', 'ya pague', 'reportar pago
         {
             capture: true,
         },
-        async (ctx, { flowDynamic, provider, fallBack, state }) => {
+        async (ctx, { provider, state, fallBack }) => {
             // Este primer capture maneja la primera entrada (archivo o texto).
-            const adminTargetNumber = NUMERO_ADMIN_PAGOS;
             const remoteJid = ctx.from;
             const pushName = ctx.pushName || 'Usuario Desconocido';
-            const messageBody = ctx.body || '';
 
             // Guardamos el JID y el nombre del usuario en el estado para usarlo en los siguientes pasos
             await state.update({ customerJid: remoteJid, customerName: pushName });
 
-            // No procesamos "MENU" o "LISTO" en la primera entrada,
-            // el usuario debe enviar primero un comprobante.
-
-            let isMedia = ctx.message?.imageMessage || ctx.message?.documentMessage || ctx.message?.videoMessage;
-
-            if (!isMedia && messageBody.length === 0) {
-                return fallBack('Por favor, envía una imagen o documento de tu comprobante para continuar.');
-            }
-
             // Notifica al admin sobre el inicio del reporte de pago
             const initialAdminMessage = `📄 [INICIO DE REPORTE DE PAGO]\n\n` +
                                         `De: ${pushName} (${remoteJid})`;
-            await provider.vendor.sendMessage(adminTargetNumber, { text: initialAdminMessage });
+            await provider.vendor.sendMessage(NUMERO_ADMIN_PAGOS, { text: initialAdminMessage });
 
             // Reenvía la información inicial
             await handleAndForwardMessage(ctx, provider, state);
 
-            await flowDynamic('Recibido. Puedes seguir enviando más información o archivos. Cuando termines, escribe *LISTO*.');
+            // Usamos fallBack para solicitar más información sin salir del flujo.
+            return fallBack('Recibido. Puedes seguir enviando más información o archivos. Cuando termines, escribe *LISTO*.');
         }
     )
     .addAnswer(
-        'Esperando más información o la palabra *LISTO*...',
+        'Si no tienes más nada que enviar, por favor escribe la palabra *LISTO*',
         {
             capture: true,
         },
-        async (ctx, { flowDynamic, provider, state, gotoFlow, endFlow }) => {
+        async (ctx, { provider, state, gotoFlow, endFlow, fallBack }) => {
             const messageBody = (ctx.body || '').toUpperCase().trim();
 
             if (messageBody.includes('LISTO')) {
                 // El usuario ha terminado de enviar información.
-                await flowDynamic('¡Gracias! Hemos recibido tu información de pago. La verificaremos a la brevedad.');
 
                 // Notificación final al admin
                 const { customerName, customerJid } = state.getMyState();
@@ -116,7 +105,9 @@ const flowInformarPago = addKeyword(['informar_pago', 'ya pague', 'reportar pago
                 await provider.vendor.sendMessage(NUMERO_ADMIN_PAGOS, { text: finalAdminMessage });
 
                 await state.clear(); // Limpiamos el estado al finalizar
-                return endFlow('Puedes escribir *MENU* para volver al inicio.');
+
+                // Ahora, terminamos el flujo.
+                return endFlow('¡Gracias! Hemos recibido tu información de pago. La verificaremos a la brevedad. Puedes escribir *MENU* para volver al inicio.');
             } else if (messageBody.includes('MENU')) {
                 await state.clear();
                 return gotoFlow(flowPrincipal);
@@ -124,8 +115,9 @@ const flowInformarPago = addKeyword(['informar_pago', 'ya pague', 'reportar pago
 
             // Si no es LISTO o MENU, el usuario está enviando más información.
             await handleAndForwardMessage(ctx, provider, state);
-            // El flow se mantiene en este punto, esperando el próximo mensaje.
-            return await flowDynamic('Recibido. Envía más información o escribe *LISTO* para finalizar.');
+
+            // Usamos fallBack para mantener al usuario en este paso del flujo.
+            return fallBack('Recibido. ¿Algo más? Cuando termines, escribe *LISTO*.');
         }
     );
 
