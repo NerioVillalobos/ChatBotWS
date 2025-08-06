@@ -4,25 +4,6 @@
 // Fecha: 2024-01-15
 // Version: 1.0.0.BETA-20240115-v0.1
 
-// --- Inicio de Adiciones para Gemini y dotenv ---
-require('dotenv').config(); // Cargar variables de entorno desde .env
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const fetch = require('node-fetch'); // Necesario para descargar la imagen/documento desde la URL de Baileys
-
-// Configura tu API Key de Gemini usando la variable de entorno
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-if (!GEMINI_API_KEY) {
-    console.error("ERROR: La variable de entorno GEMINI_API_KEY no está definida.");
-    console.error("Por favor, crea un archivo .env en la raíz de tu proyecto con GEMINI_API_KEY=TU_API_KEY");
-    process.exit(1); // Sale de la aplicación si no hay API Key
-}
-
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-console.log("Gemini API Key cargada y GoogleGenerativeAI inicializado.");
-// --- Fin de Adiciones para Gemini y dotenv ---
-
-
 const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot')
 
 const QRPortalWeb = require('@bot-whatsapp/portal')
@@ -39,9 +20,7 @@ const MockAdapter = require('@bot-whatsapp/database/mock')
 const NUMERO_ADMIN_FONTANA = '5491140638555@s.whatsapp.net'; // Ejemplo: reemplazar con el número real de WhatsApp del admin de Fontana
 const NUMERO_ADMIN_IBARRETA = '5491140638555@s.whatsapp.net'; // Ejemplo: reemplazar con el número real de WhatsApp del admin de Ibarreta
 
-// Este es el número al que se reenviarán los pagos procesados por IA.
-// ¡¡¡ASEGÚRATE DE QUE ESTE NÚMERO NO SEA EL MISMO DEL USUARIO QUE ESTÁ INTERACTUANDO CON EL BOT!!!
-// Es decir, que no sea ctx.from.
+// Este es el número al que se reenviarán los pagos.
 const NUMERO_ADMIN_PAGOS = '5491140638555@s.whatsapp.net'; // Aquí defines tu número de pruebas/administrador para pagos
 
 
@@ -317,9 +296,7 @@ const main = async () => {
         flowLlamarPersona,
         flowConsultarPrecios,
         flowMediosPago,
-        flowEntradaManualPago, // <-- AÑADE ESTE NUEVO FLUJO AQUÍ
         flowInformarPago,
-        flowConfirmarPago,
         flowServicioTecnico,
         flowAtencionAdministrativa,
         flowOtraZona,
