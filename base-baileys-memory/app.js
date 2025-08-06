@@ -4,6 +4,25 @@
 // Fecha: 2024-01-15
 // Version: 1.0.0.BETA-20240115-v0.1
 
+// --- Inicio de Adiciones para Gemini y dotenv ---
+require('dotenv').config(); // Cargar variables de entorno desde .env
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const fetch = require('node-fetch'); // Necesario para descargar la imagen/documento desde la URL de Baileys
+
+// Configura tu API Key de Gemini usando la variable de entorno
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+if (!GEMINI_API_KEY) {
+    console.error("ERROR: La variable de entorno GEMINI_API_KEY no está definida.");
+    console.error("Por favor, crea un archivo .env en la raíz de tu proyecto con GEMINI_API_KEY=TU_API_KEY");
+    process.exit(1); // Sale de la aplicación si no hay API Key
+}
+
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+console.log("Gemini API Key cargada y GoogleGenerativeAI inicializado.");
+// --- Fin de Adiciones para Gemini y dotenv ---
+
+
 const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot')
 
 const QRPortalWeb = require('@bot-whatsapp/portal')
@@ -59,122 +78,56 @@ const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'a
         []
     );
 
-// Flujo para "Informar un Pago"
 const flowInformarPago = addKeyword(['informar_pago', 'ya pague', 'reportar pago'])
     .addAnswer(
-        'Para informar un pago, por favor, envía la imagen o documento de tu comprobante. También puedes añadir un texto (DNI, nombre, etc.) junto al archivo y escribir *LISTO* cuando ya esté completada toda la información.',
+        'Por favor, ingresa tu DNI, CUIT o Nombre y Apellido.',
         {
             capture: true,
         },
-        async (ctx, { provider, state, fallBack }) => {
-            // Este primer capture maneja la primera entrada (archivo o texto).
-            const remoteJid = ctx.from;
-            const pushName = ctx.pushName || 'Usuario Desconocido';
-
-            // Guardamos el JID y el nombre del usuario en el estado para usarlo en los siguientes pasos
-            await state.update({ customerJid: remoteJid, customerName: pushName });
-
-            // Notifica al admin sobre el inicio del reporte de pago
-            const initialAdminMessage = `📄 [INICIO DE REPORTE DE PAGO]\n\n` +
-                                        `De: ${pushName} (${remoteJid})`;
-            await provider.vendor.sendMessage(NUMERO_ADMIN_PAGOS, { text: initialAdminMessage });
-
-            // Reenvía la información inicial
-            await handleAndForwardMessage(ctx, provider, state);
-
-            // Usamos fallBack para solicitar más información sin salir del flujo.
-            return fallBack('Recibido. Puedes seguir enviando más información o archivos. Cuando termines, escribe *LISTO*.');
+        async (ctx, { state }) => {
+            await state.update({ customerInfo: ctx.body });
         }
     )
     .addAnswer(
-        'Si no tienes más nada que enviar, por favor escribe la palabra *LISTO*',
+        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado.',
         {
             capture: true,
         },
-        async (ctx, { provider, state, gotoFlow, endFlow, fallBack }) => {
-            const messageBody = (ctx.body || '').toUpperCase().trim();
+        async (ctx, { provider, state, endFlow }) => {
+            const adminTargetNumber = '5491140638555@s.whatsapp.net';
+            const remoteJid = ctx.from;
+            const pushName = ctx.pushName || 'Usuario Desconocido';
+            const { customerInfo } = state.getMyState();
 
-            if (messageBody.includes('LISTO')) {
-                // El usuario ha terminado de enviar información.
+            let isMedia = ctx.message?.imageMessage || ctx.message?.documentMessage || ctx.message?.videoMessage;
 
-                // Notificación final al admin
-                const { customerName, customerJid } = state.getMyState();
-                const finalAdminMessage = `✅ [REPORTE DE PAGO FINALIZADO]\n\n` +
-                                            `De: ${customerName} (${customerJid})\n\n`+
-                                            `El usuario ha indicado que ha completado el envío de información.`;
-                await provider.vendor.sendMessage(NUMERO_ADMIN_PAGOS, { text: finalAdminMessage });
-
-                await state.clear(); // Limpiamos el estado al finalizar
-
-                // Ahora, terminamos el flujo.
-                return endFlow('¡Gracias! Hemos recibido tu información de pago. La verificaremos a la brevedad. Puedes escribir *MENU* para volver al inicio.');
-            } else if (messageBody.includes('MENU')) {
-                await state.clear();
-                return gotoFlow(flowPrincipal);
+            if (!isMedia) {
+                await provider.vendor.sendMessage(adminTargetNumber, { text: `[PAGO SIN ADJUNTO]\n\nDe: ${pushName} (${remoteJid})\n\nInfo: ${customerInfo}` });
+                return endFlow('No se ha adjuntado un archivo, pero hemos enviado tus datos. Escribe *MENU* para volver al inicio.');
             }
 
-            // Si no es LISTO o MENU, el usuario está enviando más información.
-            await handleAndForwardMessage(ctx, provider, state);
+            const adminTextMessage = `📄 [NUEVO PAGO REPORTADO]\n\n` +
+                                     `De: ${pushName} (${remoteJid})\n\n` +
+                                     `Datos del cliente: ${customerInfo}`;
+            await provider.vendor.sendMessage(adminTargetNumber, { text: adminTextMessage });
 
-            // Usamos fallBack para mantener al usuario en este paso del flujo.
-            return fallBack('Recibido. ¿Algo más? Cuando termines, escribe *LISTO*.');
-        }
-    );
-
-// Función auxiliar para reenviar mensajes al admin
-const handleAndForwardMessage = async (ctx, provider, state) => {
-    const { customerName, customerJid } = state.getMyState();
-    const adminTargetNumber = NUMERO_ADMIN_PAGOS;
-    const messageBody = ctx.body || '';
-
-    // Detección de media
-    let isMedia = false;
-    let mediaTypeKey = null;
-    if (ctx.message) {
-        if (ctx.message.imageMessage) {
-            isMedia = true;
-            mediaTypeKey = 'imageMessage';
-        } else if (ctx.message.documentMessage) {
-            isMedia = true;
-            mediaTypeKey = 'documentMessage';
-        } else if (ctx.message.videoMessage) {
-            isMedia = true;
-            mediaTypeKey = 'videoMessage';
-        }
-    }
-
-    // Reenvío del texto si existe
-    if (messageBody.length > 0) {
-        const adminTextMessage = `💬 [Info de Pago Adicional]\n\n` +
-                                 `De: ${customerName} (${customerJid})\n\n` +
-                                 `Texto: ${messageBody}`;
-        await provider.vendor.sendMessage(adminTargetNumber, { text: adminTextMessage });
-        console.log(`[INFO] Texto de ${customerJid} reenviado a ${adminTargetNumber}`);
-    }
-
-    // Reenvío del archivo media si existe
-    if (isMedia) {
-        try {
-            const mediaMessage = ctx.message[mediaTypeKey];
+            const mediaMessage = ctx.message.imageMessage || ctx.message.documentMessage || ctx.message.videoMessage;
             const fileUrl = mediaMessage.url;
             const mimeType = mediaMessage.mimetype;
-            const caption = `[ARCHIVO ADJUNTO] De ${customerName} (${customerJid})`;
+            const caption = `[RECIBO DE PAGO] De ${pushName} (${remoteJid})`;
 
-            if (mediaTypeKey === 'imageMessage') {
-                await provider.vendor.sendMessage(adminTargetNumber, { image: { url: fileUrl }, caption: messageBody ? `${caption}\n\nTexto: ${messageBody}` : caption });
-            } else if (mediaTypeKey === 'documentMessage') {
-                const fileName = mediaMessage.fileName || 'documento';
-                await provider.vendor.sendMessage(adminTargetNumber, { document: { url: fileUrl }, mimetype: mimeType, fileName, caption: messageBody ? `${caption}\n\nTexto: ${messageBody}` : caption });
-            } else if (mediaTypeKey === 'videoMessage') {
-                await provider.vendor.sendMessage(adminTargetNumber, { video: { url: fileUrl }, caption: messageBody ? `${caption}\n\nTexto: ${messageBody}` : caption });
+            if (mediaMessage.mimetype.includes('image')) {
+                await provider.vendor.sendMessage(adminTargetNumber, { image: { url: fileUrl }, caption });
+            } else if (mediaMessage.mimetype.includes('pdf')) {
+                const fileName = mediaMessage.fileName || 'recibo.pdf';
+                await provider.vendor.sendMessage(adminTargetNumber, { document: { url: fileUrl }, mimetype: mimeType, fileName, caption });
+            } else if (mediaMessage.mimetype.includes('video')) {
+                await provider.vendor.sendMessage(adminTargetNumber, { video: { url: fileUrl }, caption });
             }
-            console.log(`[INFO] Archivo de ${customerJid} reenviado a ${adminTargetNumber}.`);
-        } catch (e) {
-            console.error('[ERROR] Error al reenviar archivo:', e);
-            await provider.vendor.sendMessage(adminTargetNumber, { text: `[ERROR REENVÍO] Fallo al reenviar archivo de ${customerName} (${customerJid}).` });
+
+            return endFlow('¡Gracias! Hemos recibido tu información y será procesada a la brevedad.\n\nSi necesitas algo más, escribe *MENU*.');
         }
-    }
-};
+    );
 
 // Flujo para "Conocer los medios de pago"
 const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde pago'])
@@ -364,7 +317,9 @@ const main = async () => {
         flowLlamarPersona,
         flowConsultarPrecios,
         flowMediosPago,
+        flowEntradaManualPago, // <-- AÑADE ESTE NUEVO FLUJO AQUÍ
         flowInformarPago,
+        flowConfirmarPago,
         flowServicioTecnico,
         flowAtencionAdministrativa,
         flowOtraZona,
