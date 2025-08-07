@@ -36,29 +36,17 @@ const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'a
     });
 
 
-const flowInformarPagoFontana = addKeyword(['informar_pago_fontana'])
+const flowInformarPago = addKeyword(['informar_pago'])
     .addAnswer(
         'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
         { capture: true },
-        async (ctx, { state, gotoFlow }) => {
-            await state.update({ customerInfo: ctx.body, adminNumber: NUMERO_ADMIN_FONTANA });
-            return gotoFlow(flowCargaArchivo);
+        async (ctx, { state, fallBack }) => {
+            await state.update({ customerInfo: ctx.body });
+            return fallBack('Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.');
         }
-    );
-
-const flowInformarPagoIbarreta = addKeyword(['informar_pago_ibarreta'])
+    )
     .addAnswer(
-        'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
-        { capture: true },
-        async (ctx, { state, gotoFlow }) => {
-            await state.update({ customerInfo: ctx.body, adminNumber: NUMERO_ADMIN_IBARRETA });
-            return gotoFlow(flowCargaArchivo);
-        }
-    );
-
-const flowCargaArchivo = addKeyword(['_CARGA_ARCHIVO_'])
-    .addAnswer(
-        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
+        'Puedes cargar más archivos si lo necesitas. Cuando termines, escribe *LISTO*.',
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
             const { customerInfo, adminNumber } = state.getMyState();
@@ -184,13 +172,14 @@ const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo interne
 
 const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_fontana'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa en Fontana?', { delay: 500 })
-    .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+    .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, fallBack, state }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣'))) {
-            return gotoFlow(flowInformarPagoFontana);
+            await state.update({ adminNumber: NUMERO_ADMIN_FONTANA });
+            return gotoFlow(flowInformarPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowMediosPago);
@@ -207,13 +196,14 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
 
 const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_ibarreta'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa en Ibarreta?', { delay: 500 })
-    .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+    .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, fallBack, state }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣'))) {
-            return gotoFlow(flowInformarPagoIbarreta);
+            await state.update({ adminNumber: NUMERO_ADMIN_IBARRETA });
+            return gotoFlow(flowInformarPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowMediosPago);
@@ -241,10 +231,10 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
         }
 
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('fontana') || ctx.body.includes('1️⃣'))) {
-            return gotoFlow(flowServicioFontana);
+            return gotoFlow(flowAtencionAdministrativaFontana);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('ibarret') || ctx.body.includes('2️⃣'))) {
-            return gotoFlow(flowServicioIbarra);
+            return gotoFlow(flowAtencionAdministrativaIbarreta);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('otra') || ctx.body.includes('3️⃣'))) {
             return gotoFlow(flowOtraZona);
@@ -267,13 +257,10 @@ const main = async () => {
         flowLlamarPersona,
         flowConsultarPrecios,
         flowMediosPago,
-        flowInformarPagoFontana,
-        flowInformarPagoIbarreta,
-        flowCargaArchivo,
+        flowInformarPago,
         flowServicioTecnico,
         flowAtencionAdministrativaFontana,
         flowAtencionAdministrativaIbarreta,
-        flowOtraZona,
         flowServicioIbarra,
         flowServicioFontana,
         flowOtrasConsultas,
