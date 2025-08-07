@@ -26,66 +26,45 @@ const NUMERO_ADMIN_IBARRETA = '5491140638555@s.whatsapp.net'; // Ejemplo: reempl
 // ----------------------------------------------------
 
 // Flujo para "Llama a una persona" (general, usado también para servicio técnico)
-const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas']) // Añadimos 'otras consultas'
-    .addAnswer('Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.')
-    .addAnswer('Por favor haga clic en el siguiente link:', null, async (ctx, { flowDynamic }) => {
-        await flowDynamic('📞 https://bit.ly/4l1iOvh'); // Asegúrate de que este link sea el correcto
-    })
-    .addAnswer('Horario de atención: Lunes a Viernes de 9:00 AM a 6:00 PM.', { delay: 500 })
-    .addAnswer(
-        '¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', // Se hace más explícito el "MENU"
-        {
-            delay: 1000,
-            capture: true,
-            idle: 120000, // Se mantiene el idle por si funciona, pero el foco es el retorno manual.
-            handleIdle: async (ctx, { flowDynamic, gotoFlow }) => {
-                await flowDynamic('Parece que no has respondido. Regresando al menú principal. Puedes escribir *MENU* en cualquier momento.'); // Mensaje más claro
-                return gotoFlow(flowPrincipal); // Asegura que el flujo se redirija después del idle.
-            },
-        },
-        async (ctx, { gotoFlow, fallBack }) => {
-            // Manejo de "MENU" al inicio del callback para que siempre sea una opción.
-            if (ctx.body.toUpperCase().includes('MENU')) {
-                return gotoFlow(flowPrincipal);
-            }
-            // Si el idle no se activa, este fallback debe atrapar la inactividad o entrada no esperada.
-            return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
-        },
-        []
-    );
+const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas'])
+    .addAnswer(['Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.','\nPor favor haga clic en el siguiente link:\n📞 https://bit.ly/4l1iOvh'])
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+        if (ctx.body.toUpperCase().includes('MENU')) {
+            return gotoFlow(flowPrincipal);
+        }
+        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+    });
+    
 
 const flowInformarPagoFontana = addKeyword(['informar_pago_fontana'])
     .addAnswer(
-        'Por favor, ingresa tu DNI, CUIT o Nombre y Apellido.',
-        {
-            capture: true,
-        },
-        async (ctx, { state }) => {
+        'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
+        { capture: true },
+        async (ctx, { state, gotoFlow }) => {
             await state.update({ customerInfo: ctx.body });
+            return gotoFlow(flowCargaArchivo);
         }
-    )
+    );
+
+
+    
+const flowCargaArchivo = addKeyword(['_CARGA_ARCHIVO_']) // CÓDIGO CORREGIDO: Usa una palabra clave única
     .addAnswer(
-        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
-        {
-            capture: true,
-        },
+        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.v11.30',
+        { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
             const messageBody = (ctx.body || '').toUpperCase().trim();
-
-            if (messageBody.includes('LISTO')) {
+            
+            if (messageBody === 'LISTO') {
                 const { customerInfo } = state.getMyState();
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
-
-                const adminTextMessage = `📄 [NUEVO PAGO REPORTADO - FONTANA]\n\n` +
-                                         `De: ${pushName} (${remoteJid})\n\n` +
-                                         `Datos del cliente: ${customerInfo}`;
+                const adminTextMessage = `📄 [NUEVO PAGO REPORTADO - FONTANA]\n\nDe: ${pushName} (${remoteJid})\n\nDatos del cliente: ${customerInfo}`;
                 await provider.vendor.sendMessage(NUMERO_ADMIN_FONTANA, { text: adminTextMessage });
-
                 return endFlow('Muchas gracias, de inmediato nuestro equipo procesará la información enviada.\n\nSi necesita algo más escriba *MENU*.');
             }
-
-            let isMedia = ctx.message?.imageMessage || ctx.message?.documentMessage || ctx.message?.videoMessage;
+            
+            const isMedia = ctx.message?.imageMessage || ctx.message?.documentMessage || ctx.message?.videoMessage;
             if (isMedia) {
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
@@ -93,18 +72,20 @@ const flowInformarPagoFontana = addKeyword(['informar_pago_fontana'])
                 const fileUrl = mediaMessage.url;
                 const mimeType = mediaMessage.mimetype;
                 const caption = `[RECIBO DE PAGO - FONTANA] De ${pushName} (${remoteJid})`;
-
-                if (mediaMessage.mimetype.includes('image')) {
+                
+                if (mimeType.includes('image')) {
                     await provider.vendor.sendMessage(NUMERO_ADMIN_FONTANA, { image: { url: fileUrl }, caption });
-                } else if (mediaMessage.mimetype.includes('pdf')) {
+                } else if (mimeType.includes('pdf')) {
                     const fileName = mediaMessage.fileName || 'recibo.pdf';
                     await provider.vendor.sendMessage(NUMERO_ADMIN_FONTANA, { document: { url: fileUrl }, mimetype: mimeType, fileName, caption });
-                } else if (mediaMessage.mimetype.includes('video')) {
+                } else if (mimeType.includes('video')) {
                     await provider.vendor.sendMessage(NUMERO_ADMIN_FONTANA, { video: { url: fileUrl }, caption });
                 }
+                
+                return fallBack('Recibido. Cuando termines, escribe *LISTO*.');
             }
-
-            return fallBack('Recibido. ¿Algo más? Cuando termines, escribe *LISTO*.');
+            
+            return fallBack('Lo siento, no pude procesar tu mensaje. Por favor, envía un archivo o escribe *LISTO* para terminar.');
         }
     );
 
@@ -321,7 +302,7 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
         if (ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
-
+        
         if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣')) {
             return gotoFlow(flowInformarPagoFontana);
         }
@@ -334,6 +315,7 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
         if (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣')) {
             return gotoFlow(flowOtrasConsultas);
         }
+        // Cambio aquí: si no se reconoce la respuesta, se mantiene en el flujo.
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2, 3 o 4, o los emojis 1️⃣, 2️⃣, 3️⃣, 4️⃣). Escribe *MENU* para volver al inicio.');
     });
 
@@ -396,6 +378,7 @@ const main = async () => {
     const adapterDB = new MockAdapter();
 
     const adapterFlow = createFlow([
+        flowCargaArchivo,
         flowLlamarPersona,
         flowConsultarPrecios,
         flowMediosPago,
