@@ -40,20 +40,17 @@ const flowInformarPagoFontana = addKeyword(['informar_pago_fontana'])
     .addAnswer(
         'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
         { capture: true },
-        async (ctx, { state, gotoFlow }) => {
+        async (ctx, { state, fallBack }) => {
             await state.update({ customerInfo: ctx.body });
-            return gotoFlow(flowCargaArchivoFontana);
+            return fallBack('Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.');
         }
-    );
-
-const flowCargaArchivoFontana = addKeyword(['_CARGA_ARCHIVO_FONTANA_'])
+    )
     .addAnswer(
-        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
+        'Puedes cargar más archivos si lo necesitas. Cuando termines, escribe *LISTO*.',
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
-            console.log('[flowCargaArchivoFontana] ctx.body:', ctx.body);
             const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
-            
+
             if (messageBody === 'LISTO') {
                 const { customerInfo } = state.getMyState();
                 const remoteJid = ctx.from;
@@ -98,20 +95,17 @@ const flowInformarPagoIbarreta = addKeyword(['informar_pago_ibarreta'])
         {
             capture: true,
         },
-        async (ctx, { state, gotoFlow }) => {
+        async (ctx, { state, fallBack }) => {
             await state.update({ customerInfo: ctx.body });
-            return gotoFlow(flowCargaArchivoIbarreta);
+            return fallBack('Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.');
         }
     )
-
-const flowCargaArchivoIbarreta = addKeyword(['_CARGA_ARCHIVO_IBARRETA_'])
     .addAnswer(
-        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
+        'Puedes cargar más archivos si lo necesitas. Cuando termines, escribe *LISTO*.',
         {
             capture: true,
         },
         async (ctx, { provider, state, endFlow, fallBack }) => {
-            console.log('[flowCargaArchivoIbarreta] ctx.body:', ctx.body);
             const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
 
             if (messageBody.includes('LISTO')) {
