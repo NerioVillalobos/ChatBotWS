@@ -34,7 +34,7 @@ const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'a
         }
         return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
     });
-    
+
 
 const flowInformarPagoFontana = addKeyword(['informar_pago_fontana'])
     .addAnswer(
@@ -42,15 +42,13 @@ const flowInformarPagoFontana = addKeyword(['informar_pago_fontana'])
         { capture: true },
         async (ctx, { state, gotoFlow }) => {
             await state.update({ customerInfo: ctx.body });
-            return gotoFlow(flowCargaArchivo);
+            return gotoFlow(flowCargaArchivoFontana);
         }
     );
 
-
-    
-const flowCargaArchivo = addKeyword(['_CARGA_ARCHIVO_']) // CÓDIGO CORREGIDO: Usa una palabra clave única
+const flowCargaArchivoFontana = addKeyword(['_CARGA_ARCHIVO_FONTANA_'])
     .addAnswer(
-        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.v11.30',
+        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
             const messageBody = (ctx.body || '').toUpperCase().trim();
@@ -63,7 +61,7 @@ const flowCargaArchivo = addKeyword(['_CARGA_ARCHIVO_']) // CÓDIGO CORREGIDO: U
                 await provider.vendor.sendMessage(NUMERO_ADMIN_FONTANA, { text: adminTextMessage });
                 return endFlow('Muchas gracias, de inmediato nuestro equipo procesará la información enviada.\n\nSi necesita algo más escriba *MENU*.');
             }
-            
+
             const isMedia = ctx.message?.imageMessage || ctx.message?.documentMessage || ctx.message?.videoMessage;
             if (isMedia) {
                 const remoteJid = ctx.from;
@@ -72,7 +70,7 @@ const flowCargaArchivo = addKeyword(['_CARGA_ARCHIVO_']) // CÓDIGO CORREGIDO: U
                 const fileUrl = mediaMessage.url;
                 const mimeType = mediaMessage.mimetype;
                 const caption = `[RECIBO DE PAGO - FONTANA] De ${pushName} (${remoteJid})`;
-                
+
                 if (mimeType.includes('image')) {
                     await provider.vendor.sendMessage(NUMERO_ADMIN_FONTANA, { image: { url: fileUrl }, caption });
                 } else if (mimeType.includes('pdf')) {
@@ -84,7 +82,7 @@ const flowCargaArchivo = addKeyword(['_CARGA_ARCHIVO_']) // CÓDIGO CORREGIDO: U
                 
                 return fallBack('Recibido. Cuando termines, escribe *LISTO*.');
             }
-            
+
             return fallBack('Lo siento, no pude procesar tu mensaje. Por favor, envía un archivo o escribe *LISTO* para terminar.');
         }
     );
@@ -95,10 +93,13 @@ const flowInformarPagoIbarreta = addKeyword(['informar_pago_ibarreta'])
         {
             capture: true,
         },
-        async (ctx, { state }) => {
+        async (ctx, { state, gotoFlow }) => {
             await state.update({ customerInfo: ctx.body });
+            return gotoFlow(flowCargaArchivoIbarreta);
         }
     )
+
+const flowCargaArchivoIbarreta = addKeyword(['_CARGA_ARCHIVO_IBARRETA_'])
     .addAnswer(
         'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
         {
@@ -302,7 +303,7 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
         if (ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
-        
+
         if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣')) {
             return gotoFlow(flowInformarPagoFontana);
         }
@@ -378,7 +379,8 @@ const main = async () => {
     const adapterDB = new MockAdapter();
 
     const adapterFlow = createFlow([
-        flowCargaArchivo,
+        flowCargaArchivoFontana,
+        flowCargaArchivoIbarreta,
         flowLlamarPersona,
         flowConsultarPrecios,
         flowMediosPago,
