@@ -383,8 +383,6 @@ const main = async () => {
     const adapterDB = new MockAdapter();
 
     const adapterFlow = createFlow([
-        flowCargaArchivoFontana,
-        flowCargaArchivoIbarreta,
         flowLlamarPersona,
         flowConsultarPrecios,
         flowMediosPago,
