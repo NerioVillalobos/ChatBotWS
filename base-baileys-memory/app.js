@@ -29,7 +29,7 @@ const NUMERO_ADMIN_IBARRETA = '5491140638555@s.whatsapp.net'; // Ejemplo: reempl
 const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas'])
     .addAnswer(['Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.','\nPor favor haga clic en el siguiente link:\n📞 https://bit.ly/4l1iOvh'])
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
         return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
@@ -52,7 +52,7 @@ const flowCargaArchivoFontana = addKeyword(['_CARGA_ARCHIVO_FONTANA_'])
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
             console.log('[flowCargaArchivoFontana] ctx.body:', ctx.body);
-            const messageBody = (ctx.body || '').toUpperCase().trim();
+            const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
             
             if (messageBody === 'LISTO') {
                 const { customerInfo } = state.getMyState();
@@ -84,6 +84,10 @@ const flowCargaArchivoFontana = addKeyword(['_CARGA_ARCHIVO_FONTANA_'])
                 return fallBack('Recibido. Cuando termines, escribe *LISTO*.');
             }
 
+            if (ctx.body && ctx.body.includes('_event_media_')) {
+                return fallBack('Recibido. Cuando termines, escribe *LISTO*.');
+            }
+
             return fallBack('Lo siento, no pude procesar tu mensaje. Por favor, envía un archivo o escribe *LISTO* para terminar.');
         }
     );
@@ -108,7 +112,7 @@ const flowCargaArchivoIbarreta = addKeyword(['_CARGA_ARCHIVO_IBARRETA_'])
         },
         async (ctx, { provider, state, endFlow, fallBack }) => {
             console.log('[flowCargaArchivoIbarreta] ctx.body:', ctx.body);
-            const messageBody = (ctx.body || '').toUpperCase().trim();
+            const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
 
             if (messageBody.includes('LISTO')) {
                 const { customerInfo } = state.getMyState();
@@ -142,6 +146,10 @@ const flowCargaArchivoIbarreta = addKeyword(['_CARGA_ARCHIVO_IBARRETA_'])
                 }
             }
 
+            if (ctx.body && ctx.body.includes('_event_media_')) {
+                return fallBack('Recibido. Cuando termines, escribe *LISTO*.');
+            }
+
             return fallBack('Recibido. ¿Algo más? Cuando termines, escribe *LISTO*.');
         }
     );
@@ -164,7 +172,7 @@ const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde 
         }
     )
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
         return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
@@ -175,7 +183,7 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
     .addAnswer('Para consultar nuestros planes y precios, visita nuestra página web: [Link a la Página de Precios]')
     .addAnswer('También puedes contactarnos directamente al *[Número de Ventas]* para una atención personalizada.')
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
         return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
@@ -198,7 +206,7 @@ const flowOtrasConsultas = addKeyword(['otras_consultas', '4', '4️⃣'])
             },
         },
         async (ctx, { gotoFlow, fallBack }) => {
-            if (ctx.body.toUpperCase().includes('MENU')) {
+            if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
                 return gotoFlow(flowPrincipal);
             }
             return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
@@ -214,13 +222,13 @@ const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo interne
     .addAnswer('¡Importante! Antes de continuar, por favor, realiza estos pasos:')
     .addAnswer('• Reinicia tu router o equipo.\n• Verifica los cables y la alimentación eléctrica.\n• Confirma que realizaste estos pasos.', { delay: 1000 })
     .addAnswer('¿Ya realizaste estos pasos? (Sí/No)', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
-        if (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí'))) {
             return gotoFlow(flowLlamarPersona);
-        } else if (ctx.body.toLowerCase().includes('no')) {
+        } else if (ctx.body && typeof ctx.body === 'string' && ctx.body.toLowerCase().includes('no')) {
             return fallBack('Es fundamental que realices estos pasos para poder diagnosticar tu problema. Por favor, intenta de nuevo cuando los hayas completado. Si aún así no puedes, podemos conectarte con un agente. Escribe *MENU* para volver al inicio.');
         } else {
             return fallBack('No entendí tu respuesta. Por favor, responde "Sí" o "No". Escribe *MENU* para volver al inicio.');
@@ -231,24 +239,24 @@ const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo interne
 const flowAtencionAdministrativa = addKeyword(['administrativa', 'factura', 'pagos', 'planes', 'administracion'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa?', { delay: 500 })
     .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
-        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣'))) {
             // This is a bit of a trick. We need to know which location we are in.
             // We can't know that from here. So we will have to ask again.
             // A better solution would be to have separate administrative flows for each location.
             // For now, we will just go to the Fontana payment flow.
             return gotoFlow(flowInformarPagoFontana);
         }
-        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowMediosPago);
         }
-        if (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
             return gotoFlow(flowConsultarPrecios);
         }
-        if (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
             return gotoFlow(flowOtrasConsultas);
         }
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2, 3 o 4, o los emojis 1️⃣, 2️⃣, 3️⃣, 4️⃣). Escribe *MENU* para volver al inicio.');
@@ -259,7 +267,7 @@ const flowOtraZona = addKeyword(['otra_zona', 'otro', 'otra', 'mi zona no esta']
     .addAnswer('Actualmente, nuestros servicios de internet se concentran en Fontana e Ibarreta.')
     .addAnswer('Por favor, contáctanos directamente si deseas consultar la disponibilidad en otra zona: *[Número de Contacto para Otras Zonas]*')
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
         return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
@@ -269,14 +277,14 @@ const flowOtraZona = addKeyword(['otra_zona', 'otro', 'otra', 'mi zona no esta']
 const flowServicioIbarra = addKeyword(['Ibarreta', '2', '2️⃣'])
     .addAnswer('Entendido, servicio en Ibarreta. ¿Necesitas atención administrativa o soporte técnico?', { delay: 500 })
     .addAnswer('1️⃣ Atención Administrativa\n2️⃣ Servicio Técnico', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
-        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('administrativa') || ctx.body.includes('1️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('administrativa') || ctx.body.includes('1️⃣'))) {
             return gotoFlow(flowAtencionAdministrativaIbarreta);
         }
-        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('tecnico') || ctx.body.includes('2️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('tecnico') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowServicioTecnico);
         }
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1 o 2, o los emojis 1️⃣, 2️⃣). Escribe *MENU* para volver al inicio.');
@@ -286,14 +294,14 @@ const flowServicioIbarra = addKeyword(['Ibarreta', '2', '2️⃣'])
 const flowServicioFontana = addKeyword(['fontana', '1', '1️⃣'])
     .addAnswer('Perfecto, servicio en Fontana. ¿Necesitas atención administrativa o soporte técnico?', { delay: 500 })
     .addAnswer('1️⃣ Atención Administrativa\n2️⃣ Servicio Técnico', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
-        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('administrativa') || ctx.body.includes('1️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('administrativa') || ctx.body.includes('1️⃣'))) {
             return gotoFlow(flowAtencionAdministrativaFontana);
         }
-        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('tecnico') || ctx.body.includes('2️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('tecnico') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowServicioTecnico);
         }
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1 o 2, o los emojis 1️⃣, 2️⃣). Escribe *MENU* para volver al inicio.');
@@ -302,20 +310,20 @@ const flowServicioFontana = addKeyword(['fontana', '1', '1️⃣'])
 const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_fontana'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa en Fontana?', { delay: 500 })
     .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
-        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣'))) {
             return gotoFlow(flowInformarPagoFontana);
         }
-        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowMediosPago);
         }
-        if (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
             return gotoFlow(flowConsultarPrecios);
         }
-        if (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
             return gotoFlow(flowOtrasConsultas);
         }
         // Cambio aquí: si no se reconoce la respuesta, se mantiene en el flujo.
@@ -325,20 +333,20 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
 const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_ibarreta'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa en Ibarreta?', { delay: 500 })
     .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
-        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣'))) {
             return gotoFlow(flowInformarPagoIbarreta);
         }
-        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowMediosPago);
         }
-        if (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
             return gotoFlow(flowConsultarPrecios);
         }
-        if (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
             return gotoFlow(flowOtrasConsultas);
         }
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2, 3 o 4, o los emojis 1️⃣, 2️⃣, 3️⃣, 4️⃣). Escribe *MENU* para volver al inicio.');
@@ -353,17 +361,17 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
     .addAnswer('¡Hola! Soy el ChatBot Vanguard. ¿En qué zona necesitas ayuda con tu servicio de internet?', { delay: 500 })
     .addAnswer('Por favor, elige una opción:', { delay: 500 })
     .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta\n3️⃣ Otra Zona', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body.toUpperCase().includes('MENU')) {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
-        if (ctx.body.includes('1') || ctx.body.toLowerCase().includes('fontana') || ctx.body.includes('1️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('fontana') || ctx.body.includes('1️⃣'))) {
             return gotoFlow(flowServicioFontana);
         }
-        if (ctx.body.includes('2') || ctx.body.toLowerCase().includes('ibarret') || ctx.body.includes('2️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('ibarret') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowServicioIbarra);
         }
-        if (ctx.body.includes('3') || ctx.body.toLowerCase().includes('otra') || ctx.body.includes('3️⃣')) {
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('otra') || ctx.body.includes('3️⃣'))) {
             return gotoFlow(flowOtraZona);
         }
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2 o 3, o los emojis 1️⃣, 2️⃣, 3️⃣). Escribe *MENU* para volver al inicio.');
