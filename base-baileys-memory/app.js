@@ -36,7 +36,7 @@ const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'a
     });
 
 
-const flowInformarPago = addKeyword(['informar_pago'])
+const flowInformarPago = addKeyword(['_informar_pago_'])
     .addAnswer(
         'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
         { capture: true },
@@ -125,7 +125,7 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
     });
 
 // Flujo para "Otras Consultas" (Modificación para asegurar el retorno al menú)
-const flowOtrasConsultas = addKeyword(['otras_consultas', '4', '4️⃣'])
+const flowOtrasConsultas = addKeyword(['otras_consultas'])
     .addAnswer('Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.', null, async (ctx, { flowDynamic }) => {
         await flowDynamic('Por favor haga clic en el siguiente link: 📞 https://bit.ly/4l1iOvh');
     })
@@ -261,8 +261,6 @@ const main = async () => {
         flowServicioTecnico,
         flowAtencionAdministrativaFontana,
         flowAtencionAdministrativaIbarreta,
-        flowServicioIbarra,
-        flowServicioFontana,
         flowOtrasConsultas,
         flowPrincipal
     ]);
