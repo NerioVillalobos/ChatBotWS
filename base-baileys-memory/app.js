@@ -51,6 +51,7 @@ const flowCargaArchivoFontana = addKeyword(['_CARGA_ARCHIVO_FONTANA_'])
         'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
+            console.log('[flowCargaArchivoFontana] ctx.body:', ctx.body);
             const messageBody = (ctx.body || '').toUpperCase().trim();
             
             if (messageBody === 'LISTO') {
@@ -106,6 +107,7 @@ const flowCargaArchivoIbarreta = addKeyword(['_CARGA_ARCHIVO_IBARRETA_'])
             capture: true,
         },
         async (ctx, { provider, state, endFlow, fallBack }) => {
+            console.log('[flowCargaArchivoIbarreta] ctx.body:', ctx.body);
             const messageBody = (ctx.body || '').toUpperCase().trim();
 
             if (messageBody.includes('LISTO')) {
