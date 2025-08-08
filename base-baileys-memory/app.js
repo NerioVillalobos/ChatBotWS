@@ -64,11 +64,11 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
 
                 for (const file of mediaFiles) {
                     if (file.mimeType.includes('image')) {
-                        await provider.vendor.sendMessage(NUMERO_TEST, { image: { url: file.url }, caption: file.caption });
+                        await provider.vendor.sendMessage(NUMERO_TEST, { image: Buffer.from(file.base64, 'base64'), caption: file.caption });
                     } else if (file.mimeType.includes('pdf')) {
-                        await provider.vendor.sendMessage(NUMERO_TEST, { document: { url: file.url }, mimetype: file.mimeType, fileName: file.fileName, caption: file.caption });
+                        await provider.vendor.sendMessage(NUMERO_TEST, { document: Buffer.from(file.base64, 'base64'), mimetype: file.mimeType, fileName: file.fileName, caption: file.caption });
                     } else if (file.mimeType.includes('video')) {
-                        await provider.vendor.sendMessage(NUMERO_TEST, { video: { url: file.url }, caption: file.caption });
+                        await provider.vendor.sendMessage(NUMERO_TEST, { video: Buffer.from(file.base64, 'base64'), caption: file.caption });
                     }
                 }
 
