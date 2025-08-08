@@ -274,7 +274,6 @@ const main = async () => {
         flowConsultarPrecios,
         flowMediosPago,
         flowInformarPago,
-        flowCargaArchivo,
         flowServicioTecnico,
         flowAtencionAdministrativaFontana,
         flowAtencionAdministrativaIbarreta,
