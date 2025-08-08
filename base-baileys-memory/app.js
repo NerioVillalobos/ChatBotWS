@@ -19,7 +19,7 @@ const MockAdapter = require('@bot-whatsapp/database/mock')
 // Define los números de atención administrativa por localidad (NECESITAS REEMPLAZAR ESTOS VALORES)
 const NUMERO_ADMIN_FONTANA = '5491140638555@s.whatsapp.net'; // Ejemplo: reemplazar con el número real de WhatsApp del admin de Fontana
 const NUMERO_ADMIN_IBARRETA = '5491140638555@s.whatsapp.net'; // Ejemplo: reemplazar con el número real de WhatsApp del admin de Ibarreta
-
+const NUMERO_TEST = '5491161726168@s.whatsapp.net';
 
 // ----------------------------------------------------
 // FLUJOS FINALES / HOJAS DEL ÁRBOL
