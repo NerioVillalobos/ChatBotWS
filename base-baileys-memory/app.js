@@ -40,16 +40,18 @@ const flowInformarPago = addKeyword(['_informar_pago_'])
     .addAnswer(
         'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
         { capture: true },
-        async (ctx, { state, fallBack }) => {
+        async (ctx, { state, gotoFlow }) => {
             await state.update({ customerInfo: ctx.body, mediaFiles: [] });
-            return fallBack('Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.');
+            return gotoFlow(flowCargaArchivo);
         }
-    )
+    );
+
+const flowCargaArchivo = addKeyword(['_carga_archivo_'])
     .addAnswer(
-        'Puedes cargar más archivos si lo necesitas. Cuando termines, escribe *LISTO*.',
+        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
-            const { customerInfo, mediaFiles } = state.getMyState();
+            const { customerInfo, adminNumber, mediaFiles } = state.getMyState();
             const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
 
             if (messageBody === 'LISTO') {
@@ -274,6 +276,7 @@ const main = async () => {
         flowConsultarPrecios,
         flowMediosPago,
         flowInformarPago,
+        flowCargaArchivo,
         flowServicioTecnico,
         flowAtencionAdministrativaFontana,
         flowAtencionAdministrativaIbarreta,
