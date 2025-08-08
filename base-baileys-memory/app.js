@@ -41,7 +41,7 @@ const flowInformarPago = addKeyword(['_informar_pago_'])
         'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
         { capture: true },
         async (ctx, { state, gotoFlow }) => {
-            await state.update({ customerInfo: ctx.body, mediaFiles: [] });
+            await state.update({ customerInfo: ctx.body });
             return gotoFlow(flowCargaArchivo);
         }
     );
@@ -225,6 +225,16 @@ const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2, 3 o 4, o los emojis 1️⃣, 2️⃣, 3️⃣, 4️⃣). Escribe *MENU* para volver al inicio.');
     });
 
+const flowOtraZona = addKeyword(['otra_zona'])
+    .addAnswer('Actualmente, nuestros servicios de internet se concentran en Fontana e Ibarreta.')
+    .addAnswer('Por favor, contáctanos directamente si deseas consultar la disponibilidad en otra zona: *[Número de Contacto para Otras Zonas]*')
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
+            return gotoFlow(flowPrincipal);
+        }
+        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+    });
+
 
 // ----------------------------------------------------
 // FLUJO PRINCIPAL (Punto de entrada del bot)
@@ -233,7 +243,7 @@ const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_
 const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas tardes', 'buenas noches', 'menu', EVENTS.WELCOME])
     .addAnswer('¡Hola! Soy el ChatBot Vanguard. ¿En qué zona necesitas ayuda con tu servicio de internet?', { delay: 500 })
     .addAnswer('Por favor, elige una opción:', { delay: 500 })
-    .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+    .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta\n3️⃣ Otra Zona', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
@@ -244,7 +254,10 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('ibarret') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowAtencionAdministrativaIbarreta);
         }
-        return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1 o 2, o los emojis 1️⃣, 2️⃣). Escribe *MENU* para volver al inicio.');
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('otra') || ctx.body.includes('3️⃣'))) {
+            return gotoFlow(flowOtraZona);
+        }
+        return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2 o 3, o los emojis 1️⃣, 2️⃣, 3️⃣). Escribe *MENU* para volver al inicio.');
     })
     .addAnswer(
         'Lo siento, no entendí tu solicitud. Por favor, utiliza las opciones del menú o escribe *MENU* para empezar de nuevo.',
@@ -268,6 +281,7 @@ const main = async () => {
         flowAtencionAdministrativaFontana,
         flowAtencionAdministrativaIbarreta,
         flowOtrasConsultas,
+        flowOtraZona,
         flowPrincipal
     ]);
     const adapterProvider = createProvider(BaileysProvider);
