@@ -40,18 +40,16 @@ const flowInformarPago = addKeyword(['_informar_pago_'])
     .addAnswer(
         'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
         { capture: true },
-        async (ctx, { state, gotoFlow }) => {
-            await state.update({ customerInfo: ctx.body });
-            return gotoFlow(flowCargaArchivo);
+        async (ctx, { state, fallBack }) => {
+            await state.update({ customerInfo: ctx.body, mediaFiles: [] });
+            return fallBack('Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.');
         }
-    );
-
-const flowCargaArchivo = addKeyword(['_carga_archivo_'])
+    )
     .addAnswer(
-        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
+        'Puedes cargar más archivos si lo necesitas. Cuando termines, escribe *LISTO*.',
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
-            const { customerInfo, adminNumber, mediaFiles } = state.getMyState();
+            const { customerInfo, mediaFiles } = state.getMyState();
             const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
 
             if (messageBody === 'LISTO') {
@@ -59,15 +57,15 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
                 const pushName = ctx.pushName || 'Usuario Desconocido';
 
                 const adminTextMessage = `📄 [NUEVO PAGO REPORTADO]\n\nDe: ${pushName} (${remoteJid})\n\nDatos del cliente: ${customerInfo}`;
-                await provider.vendor.sendMessage(adminNumber, { text: adminTextMessage });
+                await provider.vendor.sendMessage(NUMERO_TEST, { text: adminTextMessage });
 
                 for (const file of mediaFiles) {
                     if (file.mimeType.includes('image')) {
-                        await provider.vendor.sendMessage(adminNumber, { image: { url: file.url }, caption: file.caption });
+                        await provider.vendor.sendMessage(NUMERO_TEST, { image: { url: file.url }, caption: file.caption });
                     } else if (file.mimeType.includes('pdf')) {
-                        await provider.vendor.sendMessage(adminNumber, { document: { url: file.url }, mimetype: file.mimeType, fileName: file.fileName, caption: file.caption });
+                        await provider.vendor.sendMessage(NUMERO_TEST, { document: { url: file.url }, mimetype: file.mimeType, fileName: file.fileName, caption: file.caption });
                     } else if (file.mimeType.includes('video')) {
-                        await provider.vendor.sendMessage(adminNumber, { video: { url: file.url }, caption: file.caption });
+                        await provider.vendor.sendMessage(NUMERO_TEST, { video: { url: file.url }, caption: file.caption });
                     }
                 }
 
