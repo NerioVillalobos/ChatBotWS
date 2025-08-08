@@ -79,16 +79,19 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
             if (isMedia) {
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
-                const mediaMessage = ctx.message.imageMessage || ctx.message.documentMessage || ctx.message.videoMessage;
 
-                const response = await fetch(mediaMessage.url);
-                const buffer = await response.arrayBuffer();
-                const base64 = Buffer.from(buffer).toString('base64');
+                // Utiliza downloadMediaMessage para obtener el buffer directamente
+                const buffer = await provider.vendor.downloadMediaMessage(ctx);
+                const base64 = buffer.toString('base64');
+
+                const mediaMessage = ctx.message.imageMessage || ctx.message.documentMessage || ctx.message.videoMessage;
+                const mimeType = mediaMessage.mimetype;
+                const fileName = mediaMessage.fileName || 'recibo';
 
                 const newFile = {
                     base64: base64,
-                    mimeType: mediaMessage.mimetype,
-                    fileName: mediaMessage.fileName || 'recibo',
+                    mimeType: mimeType,
+                    fileName: fileName,
                     caption: `[RECIBO DE PAGO] De ${pushName} (${remoteJid})`
                 };
 
