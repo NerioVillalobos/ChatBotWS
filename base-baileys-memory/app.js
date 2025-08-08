@@ -41,7 +41,7 @@ const flowInformarPago = addKeyword(['_informar_pago_'])
         'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
         { capture: true },
         async (ctx, { state, gotoFlow }) => {
-            await state.update({ customerInfo: ctx.body });
+            await state.update({ customerInfo: ctx.body, mediaFiles: [] });
             return gotoFlow(flowCargaArchivo);
         }
     );
@@ -51,14 +51,26 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
         'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
-            const { customerInfo, adminNumber } = state.getMyState();
+            const { customerInfo, adminNumber, mediaFiles } = state.getMyState();
             const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
 
             if (messageBody === 'LISTO') {
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
+
                 const adminTextMessage = `📄 [NUEVO PAGO REPORTADO]\n\nDe: ${pushName} (${remoteJid})\n\nDatos del cliente: ${customerInfo}`;
                 await provider.vendor.sendMessage(adminNumber, { text: adminTextMessage });
+
+                for (const file of mediaFiles) {
+                    if (file.mimeType.includes('image')) {
+                        await provider.vendor.sendMessage(adminNumber, { image: { url: file.url }, caption: file.caption });
+                    } else if (file.mimeType.includes('pdf')) {
+                        await provider.vendor.sendMessage(adminNumber, { document: { url: file.url }, mimetype: file.mimeType, fileName: file.fileName, caption: file.caption });
+                    } else if (file.mimeType.includes('video')) {
+                        await provider.vendor.sendMessage(adminNumber, { video: { url: file.url }, caption: file.caption });
+                    }
+                }
+
                 return endFlow('Muchas gracias, de inmediato nuestro equipo procesará la información enviada.\n\nSi necesita algo más escriba *MENU*.');
             }
 
@@ -67,20 +79,18 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
                 const mediaMessage = ctx.message.imageMessage || ctx.message.documentMessage || ctx.message.videoMessage;
-                const fileUrl = mediaMessage.url;
-                const mimeType = mediaMessage.mimetype;
-                const caption = `[RECIBO DE PAGO] De ${pushName} (${remoteJid})`;
 
-                if (mimeType.includes('image')) {
-                    await provider.vendor.sendMessage(adminNumber, { image: { url: fileUrl }, caption });
-                } else if (mimeType.includes('pdf')) {
-                    const fileName = mediaMessage.fileName || 'recibo.pdf';
-                    await provider.vendor.sendMessage(adminNumber, { document: { url: fileUrl }, mimetype: mimeType, fileName, caption });
-                } else if (mimeType.includes('video')) {
-                    await provider.vendor.sendMessage(adminNumber, { video: { url: fileUrl }, caption });
-                }
+                const newFile = {
+                    url: mediaMessage.url,
+                    mimeType: mediaMessage.mimetype,
+                    fileName: mediaMessage.fileName || 'recibo',
+                    caption: `[RECIBO DE PAGO] De ${pushName} (${remoteJid})`
+                };
 
-                return fallBack('Recibido. Cuando termines, escribe *LISTO*.');
+                const updatedMediaFiles = [...(mediaFiles || []), newFile];
+                await state.update({ mediaFiles: updatedMediaFiles });
+
+                return fallBack('Recibido. Puedes enviar más archivos o escribir *LISTO* para finalizar.');
             }
 
             return fallBack('Lo siento, no pude procesar tu mensaje. Por favor, envía un archivo o escribe *LISTO* para terminar.');
@@ -223,7 +233,7 @@ const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_
 const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas tardes', 'buenas noches', 'menu', EVENTS.WELCOME])
     .addAnswer('¡Hola! Soy el ChatBot Vanguard. ¿En qué zona necesitas ayuda con tu servicio de internet?', { delay: 500 })
     .addAnswer('Por favor, elige una opción:', { delay: 500 })
-    .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta\n3️⃣ Otra Zona', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+    .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
@@ -234,10 +244,7 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('ibarret') || ctx.body.includes('2️⃣'))) {
             return gotoFlow(flowAtencionAdministrativaIbarreta);
         }
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('otra') || ctx.body.includes('3️⃣'))) {
-            return gotoFlow(flowOtraZona);
-        }
-        return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2 o 3, o los emojis 1️⃣, 2️⃣, 3️⃣). Escribe *MENU* para volver al inicio.');
+        return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1 o 2, o los emojis 1️⃣, 2️⃣). Escribe *MENU* para volver al inicio.');
     })
     .addAnswer(
         'Lo siento, no entendí tu solicitud. Por favor, utiliza las opciones del menú o escribe *MENU* para empezar de nuevo.',
