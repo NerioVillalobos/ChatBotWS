@@ -9,6 +9,7 @@ const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@
 const QRPortalWeb = require('@bot-whatsapp/portal')
 const BaileysProvider = require('@bot-whatsapp/provider/baileys')
 const MockAdapter = require('@bot-whatsapp/database/mock')
+const fetch = require('node-fetch')
 
 /**
  * IMPORTANTE: Recuerda que los flujos se declaran de forma que los flujos "hijos"
@@ -80,8 +81,12 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
                 const pushName = ctx.pushName || 'Usuario Desconocido';
                 const mediaMessage = ctx.message.imageMessage || ctx.message.documentMessage || ctx.message.videoMessage;
 
+                const response = await fetch(mediaMessage.url);
+                const buffer = await response.arrayBuffer();
+                const base64 = Buffer.from(buffer).toString('base64');
+
                 const newFile = {
-                    url: mediaMessage.url,
+                    base64: base64,
                     mimeType: mediaMessage.mimetype,
                     fileName: mediaMessage.fileName || 'recibo',
                     caption: `[RECIBO DE PAGO] De ${pushName} (${remoteJid})`
