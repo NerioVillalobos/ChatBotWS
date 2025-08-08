@@ -112,7 +112,6 @@ out
 # Nuxt.js build / generate output
 .nuxt
 dist
-ChatBotWS/base-baileys-memory/gemini_cli_config.json
 
 # Gatsby files
 .cache/

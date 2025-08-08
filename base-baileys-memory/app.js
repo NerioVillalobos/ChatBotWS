@@ -63,13 +63,7 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
                 await provider.vendor.sendMessage(NUMERO_TEST, { text: adminTextMessage });
 
                 for (const file of mediaFiles) {
-                    if (file.mimeType.includes('image')) {
-                        await provider.vendor.sendMessage(NUMERO_TEST, { image: Buffer.from(file.base64, 'base64'), caption: file.caption });
-                    } else if (file.mimeType.includes('pdf')) {
-                        await provider.vendor.sendMessage(NUMERO_TEST, { document: Buffer.from(file.base64, 'base64'), mimetype: file.mimeType, fileName: file.fileName, caption: file.caption });
-                    } else if (file.mimeType.includes('video')) {
-                        await provider.vendor.sendMessage(NUMERO_TEST, { video: Buffer.from(file.base64, 'base64'), caption: file.caption });
-                    }
+                    await provider.vendor.forwardMessage(NUMERO_TEST, file);
                 }
 
                 return endFlow('Muchas gracias, de inmediato nuestro equipo procesará la información enviada.\n\nSi necesita algo más escriba *MENU*.');
@@ -77,22 +71,7 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
 
             const isMedia = ctx.message?.imageMessage || ctx.message?.documentMessage || ctx.message?.videoMessage;
             if (isMedia) {
-                const remoteJid = ctx.from;
-                const pushName = ctx.pushName || 'Usuario Desconocido';
-                const mediaMessage = ctx.message.imageMessage || ctx.message.documentMessage || ctx.message.videoMessage;
-
-                const response = await fetch(mediaMessage.url);
-                const buffer = await response.arrayBuffer();
-                const base64 = Buffer.from(buffer).toString('base64');
-
-                const newFile = {
-                    base64: base64,
-                    mimeType: mediaMessage.mimetype,
-                    fileName: mediaMessage.fileName || 'recibo',
-                    caption: `[RECIBO DE PAGO] De ${pushName} (${remoteJid})`
-                };
-
-                const updatedMediaFiles = [...(mediaFiles || []), newFile];
+                const updatedMediaFiles = [...(mediaFiles || []), ctx];
                 await state.update({ mediaFiles: updatedMediaFiles });
 
                 return fallBack('Recibido. Puedes enviar más archivos o escribir *LISTO* para finalizar.');
