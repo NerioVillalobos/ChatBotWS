@@ -10,6 +10,7 @@ const QRPortalWeb = require('@bot-whatsapp/portal')
 const BaileysProvider = require('@bot-whatsapp/provider/baileys')
 const MockAdapter = require('@bot-whatsapp/database/mock')
 const fetch = require('node-fetch')
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 
 /**
  * IMPORTANTE: Recuerda que los flujos se declaran de forma que los flujos "hijos"
@@ -52,9 +53,10 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
         'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
-            const { customerInfo, adminNumber, mediaFiles } = state.getMyState();
+            const { customerInfo, mediaFiles } = state.getMyState();
             const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
 
+            // Si el usuario escribe 'LISTO', procesar archivos guardados
             if (messageBody === 'LISTO') {
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
@@ -62,37 +64,49 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
                 const adminTextMessage = `📄 [NUEVO PAGO REPORTADO]\n\nDe: ${pushName} (${remoteJid})\n\nDatos del cliente: ${customerInfo}`;
                 await provider.vendor.sendMessage(NUMERO_TEST, { text: adminTextMessage });
 
+                // Enviar cada archivo guardado
                 for (const file of mediaFiles) {
-                    if (file.mimeType.includes('image')) {
-                        await provider.vendor.sendMessage(NUMERO_TEST, { image: Buffer.from(file.base64, 'base64'), caption: file.caption });
-                    } else if (file.mimeType.includes('pdf')) {
-                        await provider.vendor.sendMessage(NUMERO_TEST, { document: Buffer.from(file.base64, 'base64'), mimetype: file.mimeType, fileName: file.fileName, caption: file.caption });
-                    } else if (file.mimeType.includes('video')) {
-                        await provider.vendor.sendMessage(NUMERO_TEST, { video: Buffer.from(file.base64, 'base64'), caption: file.caption });
-                    }
+                    const buffer = Buffer.from(file.base64, 'base64');
+                    await provider.vendor.sendMessage(NUMERO_TEST, {
+                        [file.type]: buffer,
+                        mimetype: file.mimeType,
+                        fileName: file.fileName,
+                        caption: file.caption
+                    });
                 }
 
                 return endFlow('Muchas gracias, de inmediato nuestro equipo procesará la información enviada.\n\nSi necesita algo más escriba *MENU*.');
             }
 
+            // Detectar si el mensaje es un archivo multimedia
             const isMedia = ctx.message?.imageMessage || ctx.message?.documentMessage || ctx.message?.videoMessage;
             if (isMedia) {
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
-
-                // Utiliza downloadMediaMessage para obtener el buffer directamente
-                const buffer = await provider.vendor.downloadMediaMessage(ctx);
+                
+                // Descargar archivo usando Baileys
+                const buffer = await downloadMediaMessage(ctx, 'buffer', {}, provider.vendor);
                 const base64 = buffer.toString('base64');
 
                 const mediaMessage = ctx.message.imageMessage || ctx.message.documentMessage || ctx.message.videoMessage;
                 const mimeType = mediaMessage.mimetype;
                 const fileName = mediaMessage.fileName || 'recibo';
 
+                let fileType;
+                if (mimeType.includes('image')) {
+                    fileType = 'image';
+                } else if (mimeType.includes('pdf')) {
+                    fileType = 'document';
+                } else if (mimeType.includes('video')) {
+                    fileType = 'video';
+                }
+
                 const newFile = {
                     base64: base64,
                     mimeType: mimeType,
                     fileName: fileName,
-                    caption: `[RECIBO DE PAGO] De ${pushName} (${remoteJid})`
+                    caption: `[RECIBO DE PAGO] De ${pushName} (${remoteJid})`,
+                    type: fileType
                 };
 
                 const updatedMediaFiles = [...(mediaFiles || []), newFile];
