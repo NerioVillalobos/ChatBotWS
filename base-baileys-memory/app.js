@@ -4,19 +4,40 @@
 // Fecha: 2024-01-15
 // Version: 1.0.0.BETA-20240115-v0.1
 
-const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot')
+import botWhatsapp from '@bot-whatsapp/bot'
+const { createBot, createProvider, createFlow, addKeyword, EVENTS } = botWhatsapp
+import QRPortalWeb from '@bot-whatsapp/portal'
+import BaileysProvider from '@bot-whatsapp/provider/baileys'
+import MockAdapter from '@bot-whatsapp/database/mock'
+import fetch from 'node-fetch'
+import { downloadMediaMessage } from '@whiskeysockets/baileys'
+import { GoogleSpreadsheet } from 'google-spreadsheet'
+import { JWT } from 'google-auth-library'
+import fs from 'fs'
+import path, { dirname } from 'path'
+import { fileURLToPath } from 'url'
 
-const QRPortalWeb = require('@bot-whatsapp/portal')
-const BaileysProvider = require('@bot-whatsapp/provider/baileys')
-const MockAdapter = require('@bot-whatsapp/database/mock')
-const fetch = require('node-fetch')
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * IMPORTANTE: Recuerda que los flujos se declaran de forma que los flujos "hijos"
  * (a los que se llega desde otro flujo) deben ser declarados ANTES del flujo "padre"
  * que los invoca.
  */
+
+// Configuración de Google Sheets
+const SPREADSHEET_ID = '1x071H-KoQ7eM8xNpyNDLA7yJ_evG1wfQRnHOeFLvdNY';
+const SHEET_TITLE = 'ChatBot-Precios';
+let creds = {};
+try {
+    const creds_path = path.join(__dirname, 'creds.json');
+    const data = fs.readFileSync(creds_path, 'utf8');
+    creds = JSON.parse(data);
+} catch (err) {
+    console.error("Error reading or parsing creds.json:", err);
+}
+
 
 // Define los números de atención administrativa por localidad (NECESITAS REEMPLAZAR ESTOS VALORES)
 const NUMERO_ADMIN_FONTANA = '5491140638555@s.whatsapp.net'; // Ejemplo: reemplazar con el número real de WhatsApp del admin de Fontana
@@ -145,8 +166,39 @@ const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde 
 
 // Flujo para "Consultar precios de los servicios"
 const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes', 'costo'])
-    .addAnswer('Para consultar nuestros planes y precios, visita nuestra página web: [Link a la Página de Precios]')
-    .addAnswer('También puedes contactarnos directamente al *[Número de Ventas]* para una atención personalizada.')
+    .addAnswer('¡Claro! Aquí están nuestros planes y precios más recientes:', null, async (ctx, { flowDynamic, state }) => {
+        try {
+            const myState = state.getMyState();
+            const zonaSeleccionada = myState.zona;
+
+            const planes = await getPreciosFromGoogleSheet();
+
+            if (planes.length === 0) {
+                await flowDynamic('Lo siento, no pude obtener la información de los planes en este momento. Por favor, intenta de nuevo más tarde.');
+                return;
+            }
+
+            // Filter planes by the selected zone
+            const planesFiltrados = planes.filter(plan => plan.zona.toLowerCase() === zonaSeleccionada.toLowerCase());
+
+            if (planesFiltrados.length === 0) {
+                 await flowDynamic(`Lo siento, no encontré planes para la zona de ${zonaSeleccionada}.`);
+                 return;
+            }
+
+            let mensajeFinal = `*Planes para ${zonaSeleccionada.toUpperCase()}*\n\n`;
+            planesFiltrados.forEach(plan => {
+                mensajeFinal += `  - Tipo de servicio: ${plan.tipoDeServicio}\n    Precio: ${plan.precio}\n`;
+            });
+            
+            await flowDynamic(mensajeFinal.trim());
+
+        } catch (error) {
+            console.error('Error en el flujo de precios:', error);
+            await flowDynamic('Ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo más tarde.');
+        }
+    })
+    .addAnswer('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente.', { delay: 1000 })
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
@@ -177,6 +229,43 @@ const flowOtrasConsultas = addKeyword(['otras_consultas'])
             return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
         }
     );
+
+
+    /**
+ * Esta función se conecta a una Google Sheet y lee los datos
+ * @returns {Promise<Array>} Un array de objetos con los datos de los planes
+ */
+const getPreciosFromGoogleSheet = async () => {
+    try {
+        const serviceAccountAuth = new JWT({
+            email: creds.client_email,
+            key: creds.private_key,
+            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+        const doc = new GoogleSpreadsheet(SPREADSHEET_ID, serviceAccountAuth);
+        await doc.loadInfo();
+
+        const sheet = doc.sheetsByTitle[SHEET_TITLE];
+        if (!sheet) {
+            console.error(`Error: No se encontró la hoja con el título "${SHEET_TITLE}"`);
+            return [];
+        }
+
+        const rows = await sheet.getRows();
+        const planes = rows.map((row) => ({
+            tipoDeServicio: row.get('Tipo de Servicio'), // Mapea a la columna 'Tipo de Servicio'
+            zona: row.get('Zona'),                     // Mapea a la columna 'Zona'
+            precio: row.get('Precio')                       // Mapea a la columna 'Precio'
+        }));
+
+        return planes;
+    } catch (error) {
+        console.error('Error al leer la hoja de cálculo:', error);
+        return [];
+    }
+};
+
+
 
 // ----------------------------------------------------
 // FLUJOS INTERMEDIOS
@@ -215,6 +304,7 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
             return gotoFlow(flowMediosPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
+            await state.update({ zona: 'Fontana' });
             return gotoFlow(flowConsultarPrecios);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
@@ -239,6 +329,7 @@ const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_
             return gotoFlow(flowMediosPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
+            await state.update({ zona: 'Ibarreta' });
             return gotoFlow(flowConsultarPrecios);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {

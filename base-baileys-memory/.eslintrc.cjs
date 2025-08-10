@@ -17,6 +17,7 @@ module.exports = {
     ],
     parserOptions: {
         ecmaVersion: 'latest',
+        sourceType: 'module',
     },
     plugins: ['bot-whatsapp'],
     extends: ['plugin:bot-whatsapp/recommended'],
