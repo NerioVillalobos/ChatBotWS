@@ -12,6 +12,7 @@ import MockAdapter from '@bot-whatsapp/database/mock'
 import fetch from 'node-fetch'
 import { downloadMediaMessage } from '@whiskeysockets/baileys'
 import { GoogleSpreadsheet } from 'google-spreadsheet'
+import { JWT } from 'google-auth-library'
 import fs from 'fs'
 import path from 'path'
 
@@ -238,8 +239,12 @@ const flowOtrasConsultas = addKeyword(['otras_consultas'])
  */
 const getPreciosFromGoogleSheet = async () => {
     try {
-        const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
-        await doc.useServiceAccountAuth(creds);
+        const serviceAccountAuth = new JWT({
+            email: creds.client_email,
+            key: creds.private_key,
+            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+        const doc = new GoogleSpreadsheet(SPREADSHEET_ID, serviceAccountAuth);
         await doc.loadInfo();
 
         const sheet = doc.sheetsByTitle[SHEET_TITLE];
