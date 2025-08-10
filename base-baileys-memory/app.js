@@ -14,7 +14,11 @@ import { downloadMediaMessage } from '@whiskeysockets/baileys'
 import { GoogleSpreadsheet } from 'google-spreadsheet'
 import { JWT } from 'google-auth-library'
 import fs from 'fs'
-import path from 'path'
+import path, { dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * IMPORTANTE: Recuerda que los flujos se declaran de forma que los flujos "hijos"
@@ -27,7 +31,7 @@ const SPREADSHEET_ID = '1x071H-KoQ7eM8xNpyNDLA7yJ_evG1wfQRnHOeFLvdNY';
 const SHEET_TITLE = 'ChatBot-Precios';
 let creds = {};
 try {
-    const creds_path = path.join(process.cwd(), 'creds.json');
+    const creds_path = path.join(__dirname, 'creds.json');
     const data = fs.readFileSync(creds_path, 'utf8');
     creds = JSON.parse(data);
 } catch (err) {
