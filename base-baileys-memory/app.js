@@ -11,6 +11,7 @@ const BaileysProvider = require('@bot-whatsapp/provider/baileys')
 const MockAdapter = require('@bot-whatsapp/database/mock')
 const fetch = require('node-fetch')
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+const { GoogleSpreadsheet } = require('google-spreadsheet');
 
 /**
  * IMPORTANTE: Recuerda que los flujos se declaran de forma que los flujos "hijos"
@@ -145,8 +146,45 @@ const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde 
 
 // Flujo para "Consultar precios de los servicios"
 const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes', 'costo'])
-    .addAnswer('Para consultar nuestros planes y precios, visita nuestra página web: [Link a la Página de Precios]')
-    .addAnswer('También puedes contactarnos directamente al *[Número de Ventas]* para una atención personalizada.')
+    .addAnswer('¡Claro! Aquí están nuestros planes y precios más recientes:', null, async (ctx, { flowDynamic }) => {
+        try {
+            const planes = await getPreciosFromGoogleSheet();
+
+            if (planes.length === 0) {
+                await flowDynamic('Lo siento, no pude obtener la información de los planes en este momento. Por favor, intenta de nuevo más tarde.');
+                return;
+            }
+
+            // Agrupa los planes por zona
+            const planesPorZona = planes.reduce((acc, plan) => {
+                const zona = plan.zona;
+                if (!acc[zona]) {
+                    acc[zona] = [];
+                }
+                acc[zona].push(plan);
+                return acc;
+            }, {});
+
+            let mensajeFinal = '';
+
+            for (const zona in planesPorZona) {
+                mensajeFinal += `*${zona.toUpperCase()}*\n`;
+                const planesDeLaZona = planesPorZona[zona];
+                planesDeLaZona.forEach(plan => {
+                    // Formato del mensaje para cada plan
+                    mensajeFinal += `  - Tipo de servicio: ${plan.tipoDeServicio}\n    Precio: ${plan.precio}\n`;
+                });
+                mensajeFinal += '\n'; // Salto de línea entre zonas
+            }
+            
+            await flowDynamic(mensajeFinal.trim()); // .trim() para eliminar el último salto de línea extra
+
+        } catch (error) {
+            console.error('Error en el flujo de precios:', error);
+            await flowDynamic('Ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo más tarde.');
+        }
+    })
+    .addAnswer('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente.', { delay: 1000 })
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
@@ -177,6 +215,39 @@ const flowOtrasConsultas = addKeyword(['otras_consultas'])
             return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
         }
     );
+
+
+    /**
+ * Esta función se conecta a una Google Sheet y lee los datos
+ * @returns {Promise<Array>} Un array de objetos con los datos de los planes
+ */
+const getPreciosFromGoogleSheet = async () => {
+    try {
+        const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
+        await doc.useServiceAccountAuth(creds);
+        await doc.loadInfo();
+
+        const sheet = doc.sheetsByTitle[SHEET_TITLE];
+        if (!sheet) {
+            console.error(`Error: No se encontró la hoja con el título "${SHEET_TITLE}"`);
+            return [];
+        }
+
+        const rows = await sheet.getRows();
+        const planes = rows.map((row) => ({
+            tipoDeServicio: row.get('Tipo de Servicio'), // Mapea a la columna 'Tipo de Servicio'
+            zona: row.get('Zona'),                     // Mapea a la columna 'Zona'
+            precio: row.get('C')                       // Mapea a la columna 'C'
+        }));
+
+        return planes;
+    } catch (error) {
+        console.error('Error al leer la hoja de cálculo:', error);
+        return [];
+    }
+};
+
+
 
 // ----------------------------------------------------
 // FLUJOS INTERMEDIOS

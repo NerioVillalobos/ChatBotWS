@@ -64,9 +64,10 @@ build/Release
 node_modules/
 jspm_packages/
 ChatBotWS/base-baileys-memory/.env
+ChatBotWS/base-baileys-memory/creds.json
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
-
+ChatBotWS/base-baileys-memory/creds.json
 # TypeScript cache
 *.tsbuildinfo
 
