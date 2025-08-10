@@ -4,20 +4,34 @@
 // Fecha: 2024-01-15
 // Version: 1.0.0.BETA-20240115-v0.1
 
-const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot')
-
-const QRPortalWeb = require('@bot-whatsapp/portal')
-const BaileysProvider = require('@bot-whatsapp/provider/baileys')
-const MockAdapter = require('@bot-whatsapp/database/mock')
-const fetch = require('node-fetch')
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const { GoogleSpreadsheet } = require('google-spreadsheet');
+import { createBot, createProvider, createFlow, addKeyword, EVENTS } from '@bot-whatsapp/bot'
+import QRPortalWeb from '@bot-whatsapp/portal'
+import BaileysProvider from '@bot-whatsapp/provider/baileys'
+import MockAdapter from '@bot-whatsapp/database/mock'
+import fetch from 'node-fetch'
+import { downloadMediaMessage } from '@whiskeysockets/baileys'
+import { GoogleSpreadsheet } from 'google-spreadsheet'
+import fs from 'fs'
+import path from 'path'
 
 /**
  * IMPORTANTE: Recuerda que los flujos se declaran de forma que los flujos "hijos"
  * (a los que se llega desde otro flujo) deben ser declarados ANTES del flujo "padre"
  * que los invoca.
  */
+
+// Configuración de Google Sheets
+const SPREADSHEET_ID = '1x071H-KoQ7eM8xNpyNDLA7yJ_evG1wfQRnHOeFLvdNY';
+const SHEET_TITLE = 'ChatBot-Precios';
+let creds = {};
+try {
+    const creds_path = path.join(process.cwd(), 'creds.json');
+    const data = fs.readFileSync(creds_path, 'utf8');
+    creds = JSON.parse(data);
+} catch (err) {
+    console.error("Error reading or parsing creds.json:", err);
+}
+
 
 // Define los números de atención administrativa por localidad (NECESITAS REEMPLAZAR ESTOS VALORES)
 const NUMERO_ADMIN_FONTANA = '5491140638555@s.whatsapp.net'; // Ejemplo: reemplazar con el número real de WhatsApp del admin de Fontana
@@ -237,7 +251,7 @@ const getPreciosFromGoogleSheet = async () => {
         const planes = rows.map((row) => ({
             tipoDeServicio: row.get('Tipo de Servicio'), // Mapea a la columna 'Tipo de Servicio'
             zona: row.get('Zona'),                     // Mapea a la columna 'Zona'
-            precio: row.get('C')                       // Mapea a la columna 'C'
+            precio: row.get('Precio')                       // Mapea a la columna 'Precio'
         }));
 
         return planes;
