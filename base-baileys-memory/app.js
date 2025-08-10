@@ -166,8 +166,11 @@ const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde 
 
 // Flujo para "Consultar precios de los servicios"
 const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes', 'costo'])
-    .addAnswer('¡Claro! Aquí están nuestros planes y precios más recientes:', null, async (ctx, { flowDynamic }) => {
+    .addAnswer('¡Claro! Aquí están nuestros planes y precios más recientes:', null, async (ctx, { flowDynamic, state }) => {
         try {
+            const myState = state.getMyState();
+            const zonaSeleccionada = myState.zona;
+
             const planes = await getPreciosFromGoogleSheet();
 
             if (planes.length === 0) {
@@ -175,29 +178,20 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
                 return;
             }
 
-            // Agrupa los planes por zona
-            const planesPorZona = planes.reduce((acc, plan) => {
-                const zona = plan.zona;
-                if (!acc[zona]) {
-                    acc[zona] = [];
-                }
-                acc[zona].push(plan);
-                return acc;
-            }, {});
+            // Filter planes by the selected zone
+            const planesFiltrados = planes.filter(plan => plan.zona.toLowerCase() === zonaSeleccionada.toLowerCase());
 
-            let mensajeFinal = '';
-
-            for (const zona in planesPorZona) {
-                mensajeFinal += `*${zona.toUpperCase()}*\n`;
-                const planesDeLaZona = planesPorZona[zona];
-                planesDeLaZona.forEach(plan => {
-                    // Formato del mensaje para cada plan
-                    mensajeFinal += `  - Tipo de servicio: ${plan.tipoDeServicio}\n    Precio: ${plan.precio}\n`;
-                });
-                mensajeFinal += '\n'; // Salto de línea entre zonas
+            if (planesFiltrados.length === 0) {
+                 await flowDynamic(`Lo siento, no encontré planes para la zona de ${zonaSeleccionada}.`);
+                 return;
             }
+
+            let mensajeFinal = `*Planes para ${zonaSeleccionada.toUpperCase()}*\n\n`;
+            planesFiltrados.forEach(plan => {
+                mensajeFinal += `  - Tipo de servicio: ${plan.tipoDeServicio}\n    Precio: ${plan.precio}\n`;
+            });
             
-            await flowDynamic(mensajeFinal.trim()); // .trim() para eliminar el último salto de línea extra
+            await flowDynamic(mensajeFinal.trim());
 
         } catch (error) {
             console.error('Error en el flujo de precios:', error);
@@ -310,6 +304,7 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
             return gotoFlow(flowMediosPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
+            await state.update({ zona: 'Fontana' });
             return gotoFlow(flowConsultarPrecios);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
@@ -334,6 +329,7 @@ const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_
             return gotoFlow(flowMediosPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
+            await state.update({ zona: 'Ibarreta' });
             return gotoFlow(flowConsultarPrecios);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
