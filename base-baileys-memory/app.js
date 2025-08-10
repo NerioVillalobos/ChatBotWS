@@ -4,7 +4,8 @@
 // Fecha: 2024-01-15
 // Version: 1.0.0.BETA-20240115-v0.1
 
-import { createBot, createProvider, createFlow, addKeyword, EVENTS } from '@bot-whatsapp/bot'
+import botWhatsapp from '@bot-whatsapp/bot'
+const { createBot, createProvider, createFlow, addKeyword, EVENTS } = botWhatsapp
 import QRPortalWeb from '@bot-whatsapp/portal'
 import BaileysProvider from '@bot-whatsapp/provider/baileys'
 import MockAdapter from '@bot-whatsapp/database/mock'
