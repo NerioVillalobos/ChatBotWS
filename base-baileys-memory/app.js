@@ -354,6 +354,11 @@ const flowOtraZona = addKeyword(['otra_zona'])
 // ----------------------------------------------------
 
 const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas tardes', 'buenas noches', 'menu', EVENTS.WELCOME])
+    .addAction(async (ctx) => {
+        const userPhone = ctx.from;
+        const dateTime = new Date().toLocaleString('es-ES', { timeZone: 'America/Argentina/Buenos_Aires' });
+        console.log(`[NUEVA INTERACCIÓN] De: ${userPhone} a las ${dateTime}`);
+    })
     .addAnswer('¡Hola! Soy el ChatBot Vanguard. ¿En qué zona necesitas ayuda con tu servicio de internet?', { delay: 500 })
     .addAnswer('Por favor, elige una opción:', { delay: 500 })
     .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta\n3️⃣ Otra Zona', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
