@@ -13,6 +13,7 @@ import fetch from 'node-fetch'
 import { downloadMediaMessage } from '@whiskeysockets/baileys'
 import { GoogleSpreadsheet } from 'google-spreadsheet'
 import { JWT } from 'google-auth-library'
+import { Storage } from '@google-cloud/storage'
 import fs from 'fs'
 import path, { dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -387,6 +388,61 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
 // FUNCIÓN PRINCIPAL DE INICIO DEL BOT
 // ----------------------------------------------------
 const main = async () => {
+    // Configuration for GCS
+    const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'your-gcs-bucket-name';
+    const GCS_SESSION_FILE = 'baileys_store.json';
+    const LOCAL_SESSION_PATH = path.join(__dirname, GCS_SESSION_FILE);
+
+    const storage = new Storage({
+        // If you are running on Cloud Run with default service account, you don't need to specify credentials
+    });
+    const bucket = storage.bucket(GCS_BUCKET_NAME);
+    const file = bucket.file(GCS_SESSION_FILE);
+
+    // Function to upload session to GCS
+    const uploadSession = async () => {
+        try {
+            if (fs.existsSync(LOCAL_SESSION_PATH)) {
+                await bucket.upload(LOCAL_SESSION_PATH, {
+                    destination: GCS_SESSION_FILE,
+                });
+                console.log('[GCS] Session saved successfully.');
+            }
+        } catch (err) {
+            console.error('[GCS] Error uploading session:', err);
+        }
+    };
+
+    // Debounce function to avoid too many uploads
+    let uploadTimeout;
+    const debouncedUpload = () => {
+        clearTimeout(uploadTimeout);
+        uploadTimeout = setTimeout(uploadSession, 2000);
+    };
+
+    // Download session from GCS on startup
+    try {
+        console.log('[GCS] Checking for session file in bucket...');
+        const [exists] = await file.exists();
+        if (exists) {
+            console.log('[GCS] Session file found, downloading...');
+            await file.download({ destination: LOCAL_SESSION_PATH });
+            console.log('[GCS] Session downloaded successfully.');
+        } else {
+            console.log('[GCS] No session file found in bucket. A new one will be created.');
+        }
+    } catch (err) {
+        console.error('[GCS] Error downloading session:', err);
+    }
+
+    // Watch for changes in the local session file and upload to GCS
+    fs.watch(LOCAL_SESSION_PATH, (eventType, filename) => {
+        if (filename && eventType === 'change') {
+            console.log(`[GCS] Session file changed, scheduling upload.`);
+            debouncedUpload();
+        }
+    });
+
     const adapterDB = new MockAdapter();
 
     const adapterFlow = createFlow([
@@ -402,7 +458,13 @@ const main = async () => {
         flowOtraZona,
         flowPrincipal
     ]);
-    const adapterProvider = createProvider(BaileysProvider);
+
+    // Pass the store option to the provider
+    const adapterProvider = createProvider(BaileysProvider, {
+        store: {
+            path: __dirname // Tell the provider to use the current directory for storage
+        }
+    });
 
     createBot({
         flow: adapterFlow,
@@ -411,6 +473,13 @@ const main = async () => {
     });
 
     QRPortalWeb();
+
+    // Graceful shutdown
+    process.on('SIGTERM', async () => {
+        console.log('[SYSTEM] SIGTERM signal received. Uploading final session state...');
+        await uploadSession();
+        process.exit(0);
+    });
 };
 
 main();
