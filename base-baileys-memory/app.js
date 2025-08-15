@@ -15,6 +15,9 @@ import { GoogleSpreadsheet } from 'google-spreadsheet'
 import { JWT } from 'google-auth-library'
 import { Storage } from '@google-cloud/storage'
 import fs from 'fs'
+import http from 'http'
+import qrcode from 'qrcode'
+import qrcodeTerminal from 'qrcode-terminal'
 import path, { dirname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -388,82 +391,57 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
 // FUNCIÓN PRINCIPAL DE INICIO DEL BOT
 // ----------------------------------------------------
 const main = async () => {
-    // Configuration for GCS
+    // -- GCS & QR Code Setup --
     const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'your-gcs-bucket-name';
-    const GCS_SESSION_FILE = 'baileys_store.json';
-    const LOCAL_SESSION_PATH = path.join(__dirname, GCS_SESSION_FILE);
+    const SESSION_FILE_NAME = 'baileys_store.json';
+    const LOCAL_SESSION_PATH = path.join(__dirname, SESSION_FILE_NAME);
 
-    const storage = new Storage({
-        // If you are running on Cloud Run with default service account, you don't need to specify credentials
-    });
+    const storage = new Storage();
     const bucket = storage.bucket(GCS_BUCKET_NAME);
-    const file = bucket.file(GCS_SESSION_FILE);
+    const gcsFile = bucket.file(SESSION_FILE_NAME);
 
-    // Function to upload session to GCS
+    let qrCodeDataUrl = null;
+    let botStatus = 'Initializing...';
+
     const uploadSession = async () => {
         try {
             if (fs.existsSync(LOCAL_SESSION_PATH)) {
-                await bucket.upload(LOCAL_SESSION_PATH, {
-                    destination: GCS_SESSION_FILE,
-                });
+                await bucket.upload(LOCAL_SESSION_PATH, { destination: SESSION_FILE_NAME });
                 console.log('[GCS] Session saved successfully.');
             }
-        } catch (err) {
-            console.error('[GCS] Error uploading session:', err);
-        }
+        } catch (err) { console.error('[GCS] Error uploading session:', err); }
     };
 
-    // Debounce function to avoid too many uploads
-    let uploadTimeout;
-    const debouncedUpload = () => {
-        clearTimeout(uploadTimeout);
-        uploadTimeout = setTimeout(uploadSession, 2000);
-    };
+    const debouncedUpload = (() => {
+        let timeout;
+        return () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(uploadSession, 2000);
+        };
+    })();
 
-    // Download session from GCS on startup
     try {
-        console.log('[GCS] Checking for session file in bucket...');
-        const [exists] = await file.exists();
+        console.log('[GCS] Checking for session file...');
+        const [exists] = await gcsFile.exists();
         if (exists) {
             console.log('[GCS] Session file found, downloading...');
-            await file.download({ destination: LOCAL_SESSION_PATH });
-            console.log('[GCS] Session downloaded successfully.');
+            await gcsFile.download({ destination: LOCAL_SESSION_PATH });
+            console.log('[GCS] Session downloaded.');
         } else {
-            console.log('[GCS] No session file found in bucket. A new one will be created.');
+            console.log('[GCS] No session file found.');
         }
-    } catch (err) {
-        console.error('[GCS] Error downloading session:', err);
-    }
+    } catch (err) { console.error('[GCS] Error downloading session:', err); }
 
-    // Watch for changes in the local session file and upload to GCS
-    fs.watch(LOCAL_SESSION_PATH, (eventType, filename) => {
-        if (filename && eventType === 'change') {
-            console.log(`[GCS] Session file changed, scheduling upload.`);
-            debouncedUpload();
-        }
-    });
 
+    // -- Bot Creation --
     const adapterDB = new MockAdapter();
-
     const adapterFlow = createFlow([
-        flowLlamarPersona,
-        flowConsultarPrecios,
-        flowMediosPago,
-        flowInformarPago,
-        flowCargaArchivo,
-        flowServicioTecnico,
-        flowAtencionAdministrativaFontana,
-        flowAtencionAdministrativaIbarreta,
-        flowOtrasConsultas,
-        flowOtraZona,
-        flowPrincipal
+        flowLlamarPersona, flowConsultarPrecios, flowMediosPago, flowInformarPago,
+        flowCargaArchivo, flowServicioTecnico, flowAtencionAdministrativaFontana,
+        flowAtencionAdministrativaIbarreta, flowOtrasConsultas, flowOtraZona, flowPrincipal
     ]);
-
-    // Pass the store option to the provider
     const adapterProvider = createProvider(BaileysProvider, {
-        store: {
-            path: __dirname // Tell the provider to use the current directory for storage
-        }
+        store: { path: __dirname }
     });
 
     createBot({
@@ -472,11 +450,48 @@ const main = async () => {
         database: adapterDB,
     });
 
-    QRPortalWeb();
+    // -- Event Listeners & Web Server --
+    adapterProvider.on('qr', (qr) => {
+        console.log('[QR] QR Code Generated. Scan with your phone.');
+        qrcodeTerminal.generate(qr, { small: true });
+        qrcode.toDataURL(qr, (err, url) => {
+            if (!err) qrCodeDataUrl = url;
+        });
+        botStatus = 'QR Generated. Please scan.';
+    });
 
-    // Graceful shutdown
+    adapterProvider.on('ready', () => {
+        botStatus = 'Bot is ready and connected!';
+        qrCodeDataUrl = null; // Clear QR code when connected
+        console.log(`[STATUS] ${botStatus}`);
+    });
+
+    adapterProvider.on('auth_failure', (error) => {
+        botStatus = `Authentication Failure: ${error}`;
+        console.log(`[STATUS] ${botStatus}`);
+    });
+
+    fs.watch(LOCAL_SESSION_PATH, (eventType) => {
+        if (eventType === 'change') {
+            console.log('[GCS] Session file changed, scheduling upload.');
+            debouncedUpload();
+        }
+    });
+
+    const port = process.env.PORT || 8080;
+    http.createServer((req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        if (qrCodeDataUrl) {
+            res.end(`<div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;"><h1>Scan QR Code</h1><img src="${qrCodeDataUrl}" alt="QR Code"></div>`);
+        } else {
+            res.end(`<h1>Bot Status</h1><p>${botStatus}</p>`);
+        }
+    }).listen(port, () => {
+        console.log(`[SERVER] Web server listening on port ${port}`);
+    });
+
     process.on('SIGTERM', async () => {
-        console.log('[SYSTEM] SIGTERM signal received. Uploading final session state...');
+        console.log('[SYSTEM] SIGTERM received. Uploading final session...');
         await uploadSession();
         process.exit(0);
     });
