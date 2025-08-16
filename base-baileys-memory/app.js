@@ -9,7 +9,6 @@ const { createBot, createProvider, createFlow, addKeyword, EVENTS } = botWhatsap
 import QRPortalWeb from '@bot-whatsapp/portal'
 import BaileysProvider from '@bot-whatsapp/provider/baileys'
 import MockAdapter from '@bot-whatsapp/database/mock'
-import fetch from 'node-fetch'
 import { downloadMediaMessage } from '@whiskeysockets/baileys'
 import { GoogleSpreadsheet } from 'google-spreadsheet'
 import { JWT } from 'google-auth-library'
