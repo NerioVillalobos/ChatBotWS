@@ -394,7 +394,8 @@ const main = async () => {
     // -- GCS & QR Code Setup --
     const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'your-gcs-bucket-name';
     const SESSION_FILE_NAME = 'baileys_store.json';
-    const LOCAL_SESSION_PATH = path.join(__dirname, SESSION_FILE_NAME);
+    // NOTE: Using /tmp is crucial for Cloud Run's read-only filesystem.
+    const LOCAL_SESSION_PATH = path.join('/tmp', SESSION_FILE_NAME);
 
     const storage = new Storage();
     const bucket = storage.bucket(GCS_BUCKET_NAME);
@@ -441,7 +442,7 @@ const main = async () => {
         flowAtencionAdministrativaIbarreta, flowOtrasConsultas, flowOtraZona, flowPrincipal
     ]);
     const adapterProvider = createProvider(BaileysProvider, {
-        store: { path: __dirname }
+        store: { path: '/tmp' } // Use the /tmp directory for session storage
     });
 
     createBot({
