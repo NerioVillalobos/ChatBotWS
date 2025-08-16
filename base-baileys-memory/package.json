@@ -5,6 +5,7 @@
     "main": "app.js",
     "type": "module",
     "scripts": {
+        "preinstall": "npx npm-force-resolutions",
         "pre-copy": "cd .. && npm run  copy.lib base-baileys-memory",
         "start": "node app.js"
     },
@@ -26,9 +27,10 @@
     },
     "devDependencies": {
         "eslint": "^8.52.0",
-        "eslint-plugin-bot-whatsapp": "latest"
+        "eslint-plugin-bot-whatsapp": "latest",
+        "npm-force-resolutions": "0.0.10"
     },
-    "overrides": {
+    "resolutions": {
         "node-fetch": "2.6.7"
     },
     "author": "",
