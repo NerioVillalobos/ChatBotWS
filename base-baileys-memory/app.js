@@ -4,9 +4,18 @@
 // Fecha: 2024-01-15
 // Version: 1.0.0.BETA-20240115-v0.1
 
+// Global Error Handlers
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  // NOTE: No process.exit(1) here to allow the container to stay alive
+  // for Cloud Run's health checks, even if the bot logic fails.
+});
+
 import botWhatsapp from '@bot-whatsapp/bot'
 const { createBot, createProvider, createFlow, addKeyword, EVENTS } = botWhatsapp
-import QRPortalWeb from '@bot-whatsapp/portal'
 import BaileysProvider from '@bot-whatsapp/provider/baileys'
 import MockAdapter from '@bot-whatsapp/database/mock'
 import { downloadMediaMessage } from '@whiskeysockets/baileys'
@@ -22,17 +31,6 @@ import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-// Global Error Handlers
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled Rejection:', err);
-});
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-  // PM2 or other process manager should restart the process.
-  // In Cloud Run, the container will be restarted.
-  // Avoid process.exit(1) in a server environment.
-});
 
 
 /**
@@ -465,7 +463,17 @@ const main = async () => {
     // -- Event Listeners & Web Server --
     adapterProvider.on('qr', (qr) => {
         console.log('[QR] QR Code Generated. Scan with your phone.');
-        qrcodeTerminal.generate(qr, { small: true });
+        // Watch for changes in the /tmp directory and upload session file if it changes
+    try {
+        fs.watch('/tmp', (eventType, filename) => {
+            if (filename === SESSION_FILE_NAME) {
+                console.log(`[GCS] Session file event '${eventType}' detected, scheduling upload.`);
+                debouncedUpload();
+            }
+        });
+    } catch (err) {
+        console.error('[FS] Error setting up directory watch:', err);
+    }
         qrcode.toDataURL(qr, (err, url) => {
             if (!err) qrCodeDataUrl = url;
         });
@@ -482,18 +490,6 @@ const main = async () => {
         botStatus = `Authentication Failure: ${error}`;
         console.log(`[STATUS] ${botStatus}`);
     });
-
-    // Watch for changes in the /tmp directory and upload session file if it changes
-    try {
-        fs.watch('/tmp', (eventType, filename) => {
-            if (filename === SESSION_FILE_NAME) {
-                console.log(`[GCS] Session file event '${eventType}' detected, scheduling upload.`);
-                debouncedUpload();
-            }
-        });
-    } catch (err) {
-        console.error('[FS] Error setting up directory watch:', err);
-    }
 
     const port = process.env.PORT || 8080;
     http.createServer((req, res) => {
