@@ -23,6 +23,16 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Global Error Handlers
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1); // Exit on uncaught exception
+});
+
+
 /**
  * IMPORTANTE: Recuerda que los flujos se declaran de forma que los flujos "hijos"
  * (a los que se llega desde otro flujo) deben ser declarados ANTES del flujo "padre"
@@ -471,12 +481,17 @@ const main = async () => {
         console.log(`[STATUS] ${botStatus}`);
     });
 
-    fs.watch(LOCAL_SESSION_PATH, (eventType) => {
-        if (eventType === 'change') {
-            console.log('[GCS] Session file changed, scheduling upload.');
-            debouncedUpload();
-        }
-    });
+    // Watch for changes in the /tmp directory and upload session file if it changes
+    try {
+        fs.watch('/tmp', (eventType, filename) => {
+            if (filename === SESSION_FILE_NAME) {
+                console.log(`[GCS] Session file event '${eventType}' detected, scheduling upload.`);
+                debouncedUpload();
+            }
+        });
+    } catch (err) {
+        console.error('[FS] Error setting up directory watch:', err);
+    }
 
     const port = process.env.PORT || 8080;
     http.createServer((req, res) => {
