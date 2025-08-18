@@ -8,8 +8,7 @@ process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
 });
 
-import botWhatsapp from '@bot-whatsapp/bot'
-const { createBot, createProvider, createFlow, addKeyword, EVENTS } = botWhatsapp
+import { createBot, createProvider, createFlow, addKeyword, EVENTS } from '@bot-whatsapp/bot'
 import BaileysProvider from '@bot-whatsapp/provider/baileys'
 import MockAdapter from '@bot-whatsapp/database/mock'
 import { downloadMediaMessage } from '@whiskeysockets/baileys'
@@ -25,15 +24,19 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// --- Environment Variables ---
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const SHEET_TITLE = process.env.SHEET_TITLE;
+const NUMERO_TEST = process.env.NUMERO_TEST;
+const NUMERO_ADMIN_FONTANA = process.env.NUMERO_ADMIN_FONTANA;
+const NUMERO_ADMIN_IBARRETA = process.env.NUMERO_ADMIN_IBARRETA;
+
 // --- Flows Definition ---
 
 const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas'])
     .addAnswer(['Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.','\nPor favor haga clic en el siguiente link:\n📞 https://bit.ly/4l1iOvh'])
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000 }, (ctx, { gotoFlow }) => {
+        if (ctx.body.toUpperCase().includes('MENU')) return gotoFlow(flowPrincipal);
     });
 
 
@@ -60,11 +63,11 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
                 const pushName = ctx.pushName || 'Usuario Desconocido';
 
                 const adminTextMessage = `📄 [NUEVO PAGO REPORTADO]\n\nDe: ${pushName} (${remoteJid})\n\nDatos del cliente: ${customerInfo}`;
-                await provider.vendor.sendMessage(process.env.NUMERO_TEST, { text: adminTextMessage });
+                await provider.vendor.sendMessage(NUMERO_TEST, { text: adminTextMessage });
 
                 for (const file of mediaFiles) {
                     const buffer = Buffer.from(file.base64, 'base64');
-                    await provider.vendor.sendMessage(process.env.NUMERO_TEST, {
+                    await provider.vendor.sendMessage(NUMERO_TEST, {
                         [file.type]: buffer,
                         mimetype: file.mimeType,
                         fileName: file.fileName,
@@ -142,7 +145,7 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
                 return;
             }
 
-            const planesFiltrados = planes.filter(plan => plan.zona.toLowerCase() === zonaSeleccionada.toLowerCase());
+            const planesFiltrados = planes.filter(plan => plan.zona && plan.zona.toLowerCase() === zonaSeleccionada.toLowerCase());
             if (planesFiltrados.length === 0) {
                  await flowDynamic(`Lo siento, no encontré planes para la zona de ${zonaSeleccionada}.`);
                  return;
@@ -183,7 +186,7 @@ const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo interne
 const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_fontana'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa en Fontana?', { delay: 500 })
     .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, state }) => {
-        if (ctx.body.includes('1')) { await state.update({ adminNumber: process.env.NUMERO_ADMIN_FONTANA }); return gotoFlow(flowInformarPago); }
+        if (ctx.body.includes('1')) { await state.update({ adminNumber: NUMERO_ADMIN_FONTANA }); return gotoFlow(flowInformarPago); }
         if (ctx.body.includes('2')) return gotoFlow(flowMediosPago);
         if (ctx.body.includes('3')) { await state.update({ zona: 'Fontana' }); return gotoFlow(flowConsultarPrecios); }
         if (ctx.body.includes('4')) return gotoFlow(flowOtrasConsultas);
@@ -192,7 +195,7 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
 const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_ibarreta'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa en Ibarreta?', { delay: 500 })
     .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, state }) => {
-        if (ctx.body.includes('1')) { await state.update({ adminNumber: process.env.NUMERO_ADMIN_IBARRETA }); return gotoFlow(flowInformarPago); }
+        if (ctx.body.includes('1')) { await state.update({ adminNumber: NUMERO_ADMIN_IBARRETA }); return gotoFlow(flowInformarPago); }
         if (ctx.body.includes('2')) return gotoFlow(flowMediosPago);
         if (ctx.body.includes('3')) { await state.update({ zona: 'Ibarreta' }); return gotoFlow(flowConsultarPrecios); }
         if (ctx.body.includes('4')) return gotoFlow(flowOtrasConsultas);
@@ -223,9 +226,9 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
 
 const getPreciosFromGoogleSheet = async () => {
     try {
-        // Load credentials from the environment or a local file
         const creds_path = path.join(__dirname, 'creds.json');
         const creds_data = fs.existsSync(creds_path) ? fs.readFileSync(creds_path, 'utf8') : process.env.CREDS_JSON;
+        if (!creds_data) throw new Error('creds.json not found');
         const creds = JSON.parse(creds_data);
 
         const serviceAccountAuth = new JWT({
@@ -233,12 +236,12 @@ const getPreciosFromGoogleSheet = async () => {
             key: creds.private_key,
             scopes: ['https://www.googleapis.com/auth/spreadsheets'],
         });
-        const doc = new GoogleSpreadsheet(process.env.SPREADSHEET_ID, serviceAccountAuth);
+        const doc = new GoogleSpreadsheet(SPREADSHEET_ID, serviceAccountAuth);
         await doc.loadInfo();
 
-        const sheet = doc.sheetsByTitle[process.env.SHEET_TITLE];
+        const sheet = doc.sheetsByTitle[SHEET_TITLE];
         if (!sheet) {
-            console.error(`Error: No se encontró la hoja con el título "${process.env.SHEET_TITLE}"`);
+            console.error(`Error: No se encontró la hoja con el título "${SHEET_TITLE}"`);
             return [];
         }
 
@@ -265,7 +268,6 @@ const main = async () => {
 
     const storage = new Storage();
     const bucket = storage.bucket(GCS_BUCKET_NAME);
-    const gcsFile = bucket.file(SESSION_FILE_NAME);
 
     let qrCodeDataUrl = null;
     let botStatus = 'Initializing...';
@@ -289,11 +291,11 @@ const main = async () => {
     })();
 
     try {
-        console.log('[GCS] Checking for session file...');
-        const [exists] = await gcsFile.exists();
-        if (exists) {
+        console.log('[GCS] Checking for session files...');
+        const [files] = await bucket.getFiles({ prefix: 'baileys_store' });
+        if (files.length > 0) {
             console.log('[GCS] Session file found, downloading...');
-            await gcsFile.download({ destination: LOCAL_SESSION_PATH });
+            await files[0].download({ destination: LOCAL_SESSION_PATH });
             console.log('[GCS] Session downloaded.');
         } else {
             console.log('[GCS] No session file found.');
