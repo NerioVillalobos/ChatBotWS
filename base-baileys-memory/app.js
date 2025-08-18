@@ -1,17 +1,11 @@
 // app.js
-// Modificacion funcional- > luego de la correccion de errores de compilacion
-// Modificado por: Nervill
-// Fecha: 2024-01-15
-// Version: 1.0.0.BETA-20240115-v0.1
 
-// Global Error Handlers
+// Global Error Handlers to prevent container crashes
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled Rejection:', err);
 });
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
-  // NOTE: No process.exit(1) here to allow the container to stay alive
-  // for Cloud Run's health checks, even if the bot logic fails.
 });
 
 import botWhatsapp from '@bot-whatsapp/bot'
@@ -25,43 +19,14 @@ import { Storage } from '@google-cloud/storage'
 import fs from 'fs'
 import http from 'http'
 import qrcode from 'qrcode'
-import qrcodeTerminal from 'qrcode-terminal'
 import path, { dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// --- Flows Definition ---
 
-/**
- * IMPORTANTE: Recuerda que los flujos se declaran de forma que los flujos "hijos"
- * (a los que se llega desde otro flujo) deben ser declarados ANTES del flujo "padre"
- * que los invoca.
- */
-
-// Configuración de Google Sheets
-const SPREADSHEET_ID = '1x071H-KoQ7eM8xNpyNDLA7yJ_evG1wfQRnHOeFLvdNY';
-const SHEET_TITLE = 'ChatBot-Precios';
-let creds = {};
-try {
-    const creds_path = path.join(__dirname, 'creds.json');
-    const data = fs.readFileSync(creds_path, 'utf8');
-    creds = JSON.parse(data);
-} catch (err) {
-    console.error("Error reading or parsing creds.json:", err);
-}
-
-
-// Define los números de atención administrativa por localidad (NECESITAS REEMPLAZAR ESTOS VALORES)
-const NUMERO_ADMIN_FONTANA = '5491140638555@s.whatsapp.net'; // Ejemplo: reemplazar con el número real de WhatsApp del admin de Fontana
-const NUMERO_ADMIN_IBARRETA = '5491140638555@s.whatsapp.net'; // Ejemplo: reemplazar con el número real de WhatsApp del admin de Ibarreta
-const NUMERO_TEST = '5491161726168@s.whatsapp.net';
-
-// ----------------------------------------------------
-// FLUJOS FINALES / HOJAS DEL ÁRBOL
-// ----------------------------------------------------
-
-// Flujo para "Llama a una persona" (general, usado también para servicio técnico)
 const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas'])
     .addAnswer(['Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.','\nPor favor haga clic en el siguiente link:\n📞 https://bit.ly/4l1iOvh'])
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
@@ -90,18 +55,16 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
             const { customerInfo, mediaFiles } = state.getMyState();
             const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
 
-            // Si el usuario escribe 'LISTO', procesar archivos guardados
             if (messageBody === 'LISTO') {
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
 
                 const adminTextMessage = `📄 [NUEVO PAGO REPORTADO]\n\nDe: ${pushName} (${remoteJid})\n\nDatos del cliente: ${customerInfo}`;
-                await provider.vendor.sendMessage(NUMERO_TEST, { text: adminTextMessage });
+                await provider.vendor.sendMessage(process.env.NUMERO_TEST, { text: adminTextMessage });
 
-                // Enviar cada archivo guardado
                 for (const file of mediaFiles) {
                     const buffer = Buffer.from(file.base64, 'base64');
-                    await provider.vendor.sendMessage(NUMERO_TEST, {
+                    await provider.vendor.sendMessage(process.env.NUMERO_TEST, {
                         [file.type]: buffer,
                         mimetype: file.mimeType,
                         fileName: file.fileName,
@@ -112,13 +75,11 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
                 return endFlow('Muchas gracias, de inmediato nuestro equipo procesará la información enviada.\n\nSi necesita algo más escriba *MENU*.');
             }
 
-            // Detectar si el mensaje es un archivo multimedia
             const isMedia = ctx.message?.imageMessage || ctx.message?.documentMessage || ctx.message?.videoMessage;
             if (isMedia) {
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
                 
-                // Descargar archivo usando Baileys
                 const buffer = await downloadMediaMessage(ctx, 'buffer', {}, provider.vendor);
                 const base64 = buffer.toString('base64');
 
@@ -127,18 +88,12 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
                 const fileName = mediaMessage.fileName || 'recibo';
 
                 let fileType;
-                if (mimeType.includes('image')) {
-                    fileType = 'image';
-                } else if (mimeType.includes('pdf')) {
-                    fileType = 'document';
-                } else if (mimeType.includes('video')) {
-                    fileType = 'video';
-                }
+                if (mimeType.includes('image')) fileType = 'image';
+                else if (mimeType.includes('pdf')) fileType = 'document';
+                else if (mimeType.includes('video')) fileType = 'video';
 
                 const newFile = {
-                    base64: base64,
-                    mimeType: mimeType,
-                    fileName: fileName,
+                    base64, mimeType, fileName,
                     caption: `[RECIBO DE PAGO] De ${pushName} (${remoteJid})`,
                     type: fileType
                 };
@@ -153,8 +108,6 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
         }
     );
 
-
-// Flujo para "Conocer los medios de pago"
 const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde pago'])
     .addAnswer('Puedes realizar tus pagos a través de los siguientes medios:', { delay: 500 })
     .addAnswer(
@@ -166,34 +119,30 @@ const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde 
         '   ALIAS: VANGUARD.INTERNET\n' +
         '• Pagar en el local de Fontana: *Av. San Martín 1628*\n',
         null,
-        async (ctx, { flowDynamic }) => {
-            await flowDynamic('Recuerda incluir tu número de cliente en la referencia.');
-        }
+        (ctx, { flowDynamic }) => { flowDynamic('Recuerda incluir tu número de cliente en la referencia.'); }
     )
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000 }, (ctx, { gotoFlow }) => {
+        if (ctx.body.toUpperCase().includes('MENU')) return gotoFlow(flowPrincipal);
     });
 
-// Flujo para "Consultar precios de los servicios"
 const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes', 'costo'])
     .addAnswer('¡Claro! Aquí están nuestros planes y precios más recientes:', null, async (ctx, { flowDynamic, state }) => {
         try {
             const myState = state.getMyState();
-            const zonaSeleccionada = myState.zona;
+            const zonaSeleccionada = myState?.zona;
+
+            if (!zonaSeleccionada) {
+              await flowDynamic('Primero debes elegir una zona (Fontana o Ibarreta). Escribe *MENU* para volver al inicio.');
+              return;
+            }
 
             const planes = await getPreciosFromGoogleSheet();
-
             if (planes.length === 0) {
                 await flowDynamic('Lo siento, no pude obtener la información de los planes en este momento. Por favor, intenta de nuevo más tarde.');
                 return;
             }
 
-            // Filter planes by the selected zone
             const planesFiltrados = planes.filter(plan => plan.zona.toLowerCase() === zonaSeleccionada.toLowerCase());
-
             if (planesFiltrados.length === 0) {
                  await flowDynamic(`Lo siento, no encontré planes para la zona de ${zonaSeleccionada}.`);
                  return;
@@ -203,168 +152,58 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
             planesFiltrados.forEach(plan => {
                 mensajeFinal += `  - Tipo de servicio: ${plan.tipoDeServicio}\n    Precio: ${plan.precio}\n`;
             });
-            
-            await flowDynamic(mensajeFinal.trim());
 
+            await flowDynamic(mensajeFinal.trim());
         } catch (error) {
             console.error('Error en el flujo de precios:', error);
             await flowDynamic('Ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo más tarde.');
         }
     })
     .addAnswer('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente.', { delay: 1000 })
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000 }, (ctx, { gotoFlow }) => {
+        if (ctx.body.toUpperCase().includes('MENU')) return gotoFlow(flowPrincipal);
     });
 
-// Flujo para "Otras Consultas" (Modificación para asegurar el retorno al menú)
 const flowOtrasConsultas = addKeyword(['otras_consultas'])
-    .addAnswer('Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.', null, async (ctx, { flowDynamic }) => {
-        await flowDynamic('Por favor haga clic en el siguiente link: 📞 https://bit.ly/4l1iOvh');
+    .addAnswer('Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.', null, (ctx, { flowDynamic }) => {
+        flowDynamic('Por favor haga clic en el siguiente link: 📞 https://bit.ly/4l1iOvh');
     })
-    .addAnswer(
-        '¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.',
-        {
-            delay: 1000,
-            capture: true,
-            idle: 120000,
-            handleIdle: async (ctx, { flowDynamic, gotoFlow }) => {
-                await flowDynamic('Parece que no has respondido. Regresando al menú principal. Puedes escribir *MENU* en cualquier momento.');
-                return gotoFlow(flowPrincipal);
-            },
-        },
-        async (ctx, { gotoFlow, fallBack }) => {
-            if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-                return gotoFlow(flowPrincipal);
-            }
-            return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
-        }
-    );
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000 }, (ctx, { gotoFlow }) => {
+        if (ctx.body.toUpperCase().includes('MENU')) return gotoFlow(flowPrincipal);
+    });
 
-
-    /**
- * Esta función se conecta a una Google Sheet y lee los datos
- * @returns {Promise<Array>} Un array de objetos con los datos de los planes
- */
-const getPreciosFromGoogleSheet = async () => {
-    try {
-        const serviceAccountAuth = new JWT({
-            email: creds.client_email,
-            key: creds.private_key,
-            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-        });
-        const doc = new GoogleSpreadsheet(SPREADSHEET_ID, serviceAccountAuth);
-        await doc.loadInfo();
-
-        const sheet = doc.sheetsByTitle[SHEET_TITLE];
-        if (!sheet) {
-            console.error(`Error: No se encontró la hoja con el título "${SHEET_TITLE}"`);
-            return [];
-        }
-
-        const rows = await sheet.getRows();
-        const planes = rows.map((row) => ({
-            tipoDeServicio: row.get('Tipo de Servicio'), // Mapea a la columna 'Tipo de Servicio'
-            zona: row.get('Zona'),                     // Mapea a la columna 'Zona'
-            precio: row.get('Precio')                       // Mapea a la columna 'Precio'
-        }));
-
-        return planes;
-    } catch (error) {
-        console.error('Error al leer la hoja de cálculo:', error);
-        return [];
-    }
-};
-
-
-
-// ----------------------------------------------------
-// FLUJOS INTERMEDIOS
-// ----------------------------------------------------
-
-// Flujo para "Servicio Técnico"
 const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo internet', 'soporte'])
     .addAnswer('¡Importante! Antes de continuar, por favor, realiza estos pasos:')
     .addAnswer('• Reinicia tu router o equipo.\n• Verifica los cables y la alimentación eléctrica.\n• Confirma que realizaste estos pasos.', { delay: 1000 })
     .addAnswer('¿Ya realizaste estos pasos? (Sí/No)', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí'))) {
-            return gotoFlow(flowLlamarPersona);
-        } else if (ctx.body && typeof ctx.body === 'string' && ctx.body.toLowerCase().includes('no')) {
-            return fallBack('Es fundamental que realices estos pasos para poder diagnosticar tu problema. Por favor, intenta de nuevo cuando los hayas completado. Si aún así no puedes, podemos conectarte con un agente. Escribe *MENU* para volver al inicio.');
-        } else {
-            return fallBack('No entendí tu respuesta. Por favor, responde "Sí" o "No". Escribe *MENU* para volver al inicio.');
-        }
+        if (ctx.body.toUpperCase().includes('SI')) return gotoFlow(flowLlamarPersona);
+        return fallBack('Es fundamental que realices estos pasos para poder diagnosticar tu problema. Escribe *MENU* para volver al inicio.');
     });
 
 const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_fontana'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa en Fontana?', { delay: 500 })
-    .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, fallBack, state }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣'))) {
-            await state.update({ adminNumber: NUMERO_ADMIN_FONTANA });
-            return gotoFlow(flowInformarPago);
-        }
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
-            return gotoFlow(flowMediosPago);
-        }
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
-            await state.update({ zona: 'Fontana' });
-            return gotoFlow(flowConsultarPrecios);
-        }
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
-            return gotoFlow(flowOtrasConsultas);
-        }
-        // Cambio aquí: si no se reconoce la respuesta, se mantiene en el flujo.
-        return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2, 3 o 4, o los emojis 1️⃣, 2️⃣, 3️⃣, 4️⃣). Escribe *MENU* para volver al inicio.');
+    .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, state }) => {
+        if (ctx.body.includes('1')) { await state.update({ adminNumber: process.env.NUMERO_ADMIN_FONTANA }); return gotoFlow(flowInformarPago); }
+        if (ctx.body.includes('2')) return gotoFlow(flowMediosPago);
+        if (ctx.body.includes('3')) { await state.update({ zona: 'Fontana' }); return gotoFlow(flowConsultarPrecios); }
+        if (ctx.body.includes('4')) return gotoFlow(flowOtrasConsultas);
     });
 
 const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_ibarreta'])
     .addAnswer('¿En qué puedo ayudarte con Atención Administrativa en Ibarreta?', { delay: 500 })
-    .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, fallBack, state }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣'))) {
-            await state.update({ adminNumber: NUMERO_ADMIN_IBARRETA });
-            return gotoFlow(flowInformarPago);
-        }
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
-            return gotoFlow(flowMediosPago);
-        }
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
-            await state.update({ zona: 'Ibarreta' });
-            return gotoFlow(flowConsultarPrecios);
-        }
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
-            return gotoFlow(flowOtrasConsultas);
-        }
-        return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2, 3 o 4, o los emojis 1️⃣, 2️⃣, 3️⃣, 4️⃣). Escribe *MENU* para volver al inicio.');
+    .addAnswer('1️⃣ Informar un Pago\n2️⃣ Conocer Medios de Pago\n3️⃣ Consultar Precios de los Servicios\n4️⃣ Otras Consultas', { capture: true }, async (ctx, { gotoFlow, state }) => {
+        if (ctx.body.includes('1')) { await state.update({ adminNumber: process.env.NUMERO_ADMIN_IBARRETA }); return gotoFlow(flowInformarPago); }
+        if (ctx.body.includes('2')) return gotoFlow(flowMediosPago);
+        if (ctx.body.includes('3')) { await state.update({ zona: 'Ibarreta' }); return gotoFlow(flowConsultarPrecios); }
+        if (ctx.body.includes('4')) return gotoFlow(flowOtrasConsultas);
     });
 
 const flowOtraZona = addKeyword(['otra_zona'])
     .addAnswer('Actualmente, nuestros servicios de internet se concentran en Fontana e Ibarreta.')
     .addAnswer('Por favor, contáctanos directamente si deseas consultar la disponibilidad en otra zona: *[Número de Contacto para Otras Zonas]*')
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000 }, (ctx, { gotoFlow }) => {
+        if (ctx.body.toUpperCase().includes('MENU')) return gotoFlow(flowPrincipal);
     });
-
-
-// ----------------------------------------------------
-// FLUJO PRINCIPAL (Punto de entrada del bot)
-// ----------------------------------------------------
 
 const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas tardes', 'buenas noches', 'menu', EVENTS.WELCOME])
     .addAction(async (ctx) => {
@@ -374,37 +213,55 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
     })
     .addAnswer('¡Hola! Soy el ChatBot Vanguard. ¿En qué zona necesitas ayuda con tu servicio de internet?', { delay: 500 })
     .addAnswer('Por favor, elige una opción:', { delay: 500 })
-    .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta\n3️⃣ Otra Zona', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
+    .addAnswer('1️⃣ Servicio de Internet en Fontana\n2️⃣ Servicio de Internet en Ibarreta\n3️⃣ Otra Zona', { capture: true }, (ctx, { gotoFlow }) => {
+        if (ctx.body.includes('1')) return gotoFlow(flowAtencionAdministrativaFontana);
+        if (ctx.body.includes('2')) return gotoFlow(flowAtencionAdministrativaIbarreta);
+        if (ctx.body.includes('3')) return gotoFlow(flowOtraZona);
+    });
+
+// --- Helper Functions ---
+
+const getPreciosFromGoogleSheet = async () => {
+    try {
+        // Load credentials from the environment or a local file
+        const creds_path = path.join(__dirname, 'creds.json');
+        const creds_data = fs.existsSync(creds_path) ? fs.readFileSync(creds_path, 'utf8') : process.env.CREDS_JSON;
+        const creds = JSON.parse(creds_data);
+
+        const serviceAccountAuth = new JWT({
+            email: creds.client_email,
+            key: creds.private_key,
+            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+        const doc = new GoogleSpreadsheet(process.env.SPREADSHEET_ID, serviceAccountAuth);
+        await doc.loadInfo();
+
+        const sheet = doc.sheetsByTitle[process.env.SHEET_TITLE];
+        if (!sheet) {
+            console.error(`Error: No se encontró la hoja con el título "${process.env.SHEET_TITLE}"`);
+            return [];
         }
 
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('fontana') || ctx.body.includes('1️⃣'))) {
-            return gotoFlow(flowAtencionAdministrativaFontana);
-        }
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('ibarret') || ctx.body.includes('2️⃣'))) {
-            return gotoFlow(flowAtencionAdministrativaIbarreta);
-        }
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('otra') || ctx.body.includes('3️⃣'))) {
-            return gotoFlow(flowOtraZona);
-        }
-        return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2 o 3, o los emojis 1️⃣, 2️⃣, 3️⃣). Escribe *MENU* para volver al inicio.');
-    })
-    .addAnswer(
-        'Lo siento, no entendí tu solicitud. Por favor, utiliza las opciones del menú o escribe *MENU* para empezar de nuevo.',
-        { delay: 1500 }
-    );
+        const rows = await sheet.getRows();
+        return rows.map(row => ({
+            tipoDeServicio: row.get('Tipo de Servicio'),
+            zona: row.get('Zona'),
+            precio: row.get('Precio')
+        }));
+    } catch (error) {
+        console.error('Error al leer la hoja de cálculo:', error);
+        return [];
+    }
+};
 
+// --- Main Execution ---
 
-// ----------------------------------------------------
-// FUNCIÓN PRINCIPAL DE INICIO DEL BOT
-// ----------------------------------------------------
 const main = async () => {
-    // -- GCS & QR Code Setup --
-    const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'your-gcs-bucket-name';
+    // -- GCS & Session Setup --
+    const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
     const SESSION_FILE_NAME = 'baileys_store.json';
-    // NOTE: Using /tmp is crucial for Cloud Run's read-only filesystem.
-    const LOCAL_SESSION_PATH = path.join('/tmp', SESSION_FILE_NAME);
+    const TMP_DIR = '/tmp';
+    const LOCAL_SESSION_PATH = path.join(TMP_DIR, SESSION_FILE_NAME);
 
     const storage = new Storage();
     const bucket = storage.bucket(GCS_BUCKET_NAME);
@@ -415,19 +272,20 @@ const main = async () => {
 
     const uploadSession = async () => {
         try {
-            if (fs.existsSync(LOCAL_SESSION_PATH)) {
-                await bucket.upload(LOCAL_SESSION_PATH, { destination: SESSION_FILE_NAME });
-                console.log('[GCS] Session saved successfully.');
+            const files = fs.readdirSync(TMP_DIR).filter(f => /baileys|auth|session/i.test(f));
+            for (const f of files) {
+                const localPath = path.join(TMP_DIR, f);
+                if (fs.existsSync(localPath)) {
+                    await bucket.upload(localPath, { destination: f });
+                    console.log(`[GCS] Uploaded session file: ${f}`);
+                }
             }
-        } catch (err) { console.error('[GCS] Error uploading session:', err); }
+        } catch (err) { console.error('[GCS] Error uploading session files:', err); }
     };
 
     const debouncedUpload = (() => {
         let timeout;
-        return () => {
-            clearTimeout(timeout);
-            timeout = setTimeout(uploadSession, 2000);
-        };
+        return () => { clearTimeout(timeout); timeout = setTimeout(uploadSession, 2000); };
     })();
 
     try {
@@ -442,6 +300,23 @@ const main = async () => {
         }
     } catch (err) { console.error('[GCS] Error downloading session:', err); }
 
+    let watcherStarted = false;
+    const startTmpWatcher = () => {
+      if (watcherStarted) return;
+      try {
+        fs.watch(TMP_DIR, (eventType, filename) => {
+          if (!filename) return;
+          if ((eventType === 'change' || eventType === 'rename') && /baileys|auth|session/i.test(filename)) {
+            console.log(`[GCS] Session file ${filename} ${eventType} -> scheduling upload`);
+            debouncedUpload();
+          }
+        });
+        watcherStarted = true;
+        console.log('[FS] Watcher on /tmp started.');
+      } catch (err) {
+        console.error('[FS] Error starting /tmp watcher:', err);
+      }
+    };
 
     // -- Bot Creation --
     const adapterDB = new MockAdapter();
@@ -451,7 +326,7 @@ const main = async () => {
         flowAtencionAdministrativaIbarreta, flowOtrasConsultas, flowOtraZona, flowPrincipal
     ]);
     const adapterProvider = createProvider(BaileysProvider, {
-        store: { path: '/tmp' } // Use the /tmp directory for session storage
+        store: { path: TMP_DIR }
     });
 
     createBot({
@@ -460,29 +335,20 @@ const main = async () => {
         database: adapterDB,
     });
 
+    startTmpWatcher();
+
     // -- Event Listeners & Web Server --
     adapterProvider.on('qr', (qr) => {
-        console.log('[QR] QR Code Generated. Scan with your phone.');
-        // Watch for changes in the /tmp directory and upload session file if it changes
-    try {
-        fs.watch('/tmp', (eventType, filename) => {
-            if (filename === SESSION_FILE_NAME) {
-                console.log(`[GCS] Session file event '${eventType}' detected, scheduling upload.`);
-                debouncedUpload();
-            }
-        });
-    } catch (err) {
-        console.error('[FS] Error setting up directory watch:', err);
-    }
+        botStatus = 'QR Generated. Please scan.';
+        console.log(`[QR] ${botStatus}`);
         qrcode.toDataURL(qr, (err, url) => {
             if (!err) qrCodeDataUrl = url;
         });
-        botStatus = 'QR Generated. Please scan.';
     });
 
     adapterProvider.on('ready', () => {
         botStatus = 'Bot is ready and connected!';
-        qrCodeDataUrl = null; // Clear QR code when connected
+        qrCodeDataUrl = null;
         console.log(`[STATUS] ${botStatus}`);
     });
 
@@ -493,6 +359,10 @@ const main = async () => {
 
     const port = process.env.PORT || 8080;
     http.createServer((req, res) => {
+        if (req.url === '/healthz') {
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            return res.end('ok');
+        }
         res.writeHead(200, { 'Content-Type': 'text/html' });
         if (qrCodeDataUrl) {
             res.end(`<div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;"><h1>Scan QR Code</h1><img src="${qrCodeDataUrl}" alt="QR Code"></div>`);

@@ -22,7 +22,6 @@
         "google-auth-library": "9.14.2",
         "google-spreadsheet": "5.1.15",
         "qrcode": "latest",
-        "qrcode-terminal": "latest",
         "wa-sticker-formatter": "^4.4.4"
     },
     "devDependencies": {
