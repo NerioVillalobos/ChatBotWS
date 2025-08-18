@@ -29,7 +29,9 @@ process.on('unhandledRejection', (err) => {
 });
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
-  process.exit(1); // Exit on uncaught exception
+  // PM2 or other process manager should restart the process.
+  // In Cloud Run, the container will be restarted.
+  // Avoid process.exit(1) in a server environment.
 });
 
 

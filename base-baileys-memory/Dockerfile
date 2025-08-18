@@ -1,11 +1,12 @@
 # ---- Base Stage ----
-FROM node:18-bullseye AS base
+FROM node:20-bullseye AS base
 WORKDIR /app
 
 # ---- Dependencies Stage ----
 FROM base AS dependencies
 COPY package*.json ./
-RUN npm install --only=production
+# Use --omit=dev which is the modern equivalent of --only=production
+RUN npm install --omit=dev
 
 # ---- Build Stage ----
 FROM base AS build
@@ -13,7 +14,8 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 
 # ---- Final Stage ----
-FROM node:18-slim AS final
+FROM node:20-slim AS final
+ENV NODE_ENV=production
 WORKDIR /app
 
 # Create a non-root user
