@@ -245,7 +245,8 @@ const flowMediosPagoIbarreta = addKeyword('__MEDIOS_PAGO_IBARRETA__')
 
 // Flujo para "Consultar precios de los servicios"
 const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes', 'costo'])
-    .addAnswer('¡Claro! Aquí están nuestros planes y precios más recientes:', null, async (ctx, { flowDynamic, state }) => {
+    .addAction(async (ctx, { flowDynamic, state }) => {
+        await flowDynamic('¡Claro! Aquí están nuestros planes y precios más recientes:');
         try {
             const myState = state.getMyState();
             const zonaSeleccionada = myState.zona;
@@ -277,8 +278,8 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
             await flowDynamic('Ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo más tarde.');
         }
     })
-    .addAnswer('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente.', { delay: 1000 })
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+    .addAnswer('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente 📞 https://bit.ly/4l1iOvh')
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe MENU para volver a inicio.', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
