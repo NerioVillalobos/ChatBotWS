@@ -28,34 +28,9 @@ const NUMERO_TEST = '5491161726168@s.whatsapp.net';
 // FLUJOS FINALES / HOJAS DEL ÁRBOL
 // ----------------------------------------------------
 
-const isBusinessHours = () => {
-    const now = new Date();
-    const day = now.getDay(); // 0 (Domingo) a 6 (Sábado)
-    const hour = now.getHours();
-
-    // Lunes a Viernes de 8am a 8pm (20:00)
-    if (day >= 1 && day <= 5) {
-        return hour >= 8 && hour < 20;
-    }
-    // Sábados de 8am a 1pm (13:00)
-    if (day === 6) {
-        return hour >= 8 && hour < 13;
-    }
-    return false; // Domingos y fuera de horario
-};
-
 // Flujo para "Llama a una persona" (general, usado también para servicio técnico)
 const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas'])
-    .addAnswer(
-        'Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.',
-        null,
-        async (ctx, { flowDynamic }) => {
-            if (!isBusinessHours()) {
-                await flowDynamic('Nuestro horario de atención es de Lunes a Viernes de 8:00 a 20:00 y Sábados de 8:00 a 13:00. Un agente se pondrá en contacto contigo en cuanto sea posible.');
-            }
-        }
-    )
-    .addAnswer('\nPor favor haga clic en el siguiente link:\n📞 https://bit.ly/4l1iOvh')
+    .addAnswer(['Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.','\nPor favor haga clic en el siguiente link:\n📞 https://bit.ly/4l1iOvh'])
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
@@ -64,27 +39,12 @@ const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'a
     });
 
 
-const flowRequestDNI = addKeyword(['_request_dni_'])
-    .addAnswer(
-        'Por favor, ingresa tu DNI o CUIT.',
-        { capture: true },
-        async (ctx, { state, gotoFlow, fallBack }) => {
-            const dni = ctx.body.replace(/\D/g, ''); // Eliminar no dígitos
-            if (dni.length < 7 || dni.length > 11) {
-                return fallBack('El DNI/CUIT ingresado no es válido. Por favor, inténtalo de nuevo.');
-            }
-            await state.update({ dni: dni });
-            return gotoFlow(flowInformarPago);
-        }
-    );
-
 const flowInformarPago = addKeyword(['_informar_pago_'])
     .addAnswer(
-        'Gracias. Ahora, por favor, ingresa tu Nombre y Apellido.',
+        'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
         { capture: true },
         async (ctx, { state, gotoFlow }) => {
-            const myState = state.getMyState();
-            await state.update({ customerInfo: `DNI/CUIT: ${myState.dni}\nNombre: ${ctx.body}`, mediaFiles: [] });
+            await state.update({ customerInfo: ctx.body, mediaFiles: [] });
             return gotoFlow(flowCargaArchivo);
         }
     );
@@ -124,7 +84,7 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
             if (isMedia) {
                 const remoteJid = ctx.from;
                 const pushName = ctx.pushName || 'Usuario Desconocido';
-                
+
                 // Descargar archivo usando Baileys
                 const buffer = await downloadMediaMessage(ctx, 'buffer', {}, provider.vendor);
                 const base64 = buffer.toString('base64');
@@ -161,35 +121,21 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
     );
 
 
-// Flujos para "Conocer los medios de pago"
-const flowMediosPagoFontana = addKeyword(['medios_pago_fontana'])
-    .addAnswer('Puedes realizar tus pagos a través de los siguientes medios en *Fontana*:', { delay: 500 })
+// Flujo para "Conocer los medios de pago"
+const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde pago'])
+    .addAnswer('Puedes realizar tus pagos a través de los siguientes medios:', { delay: 500 })
     .addAnswer(
+        '• Pago en línea: [Link al Portal de Pagos]\n' +
         '• Transferencia bancaria:\n' +
         '   *VANGUARD INTERNET SRL*\n' +
         '   CUIT: 30716576376\n' +
         '   CBU: 0170304520000031123901\n' +
         '   ALIAS: VANGUARD.INTERNET\n' +
-        '• Pagar en el local de Fontana: *Av. San Martín 1628*\n\n' +
-        'Recuerda incluir tu DNI o CUIT en la referencia de pago.',
-    )
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
+        '• Pagar en el local de Fontana: *Av. San Martín 1628*\n',
+        null,
+        async (ctx, { flowDynamic }) => {
+            await flowDynamic('Recuerda incluir tu número de cliente en la referencia.');
         }
-        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
-    });
-
-const flowMediosPagoIbarreta = addKeyword(['medios_pago_ibarreta'])
-    .addAnswer('Puedes realizar tus pagos a través de los siguientes medios en *Ibarreta*:', { delay: 500 })
-    .addAnswer(
-        '• Transferencia bancaria:\n' +
-        '   *VANGUARD INTERNET SRL*\n' +
-        '   CUIT: 30716576376\n' +
-        '   CBU: 0170304520000031123901\n' +
-        '   ALIAS: VANGUARD.INTERNET\n' +
-        '• Pagar en el local de Ibarreta: *Av. 25 de Mayo y San Martín*\n\n' +
-        'Recuerda incluir tu DNI o CUIT en la referencia de pago.',
     )
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
@@ -270,23 +216,6 @@ const flowOtrasConsultas = addKeyword(['otras_consultas'])
         }
     );
 
-const flowOtrasConsultasIbarreta = addKeyword(['otras_consultas_ibarreta'])
-    .addAnswer('Para poder ayudarte mejor, por favor realiza una verificación previa de tu equipo.')
-    .addAnswer('• Reinicia tu router o equipo.\n• Verifica los cables y la alimentación eléctrica.\n• Confirma que realizaste estos pasos.', { delay: 1000 })
-    .addAnswer('¿Ya realizaste estos pasos? (Sí/No)', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-
-        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí'))) {
-            return gotoFlow(flowLlamarPersona);
-        } else if (ctx.body && typeof ctx.body === 'string' && ctx.body.toLowerCase().includes('no')) {
-            return fallBack('Es fundamental que realices estos pasos para poder diagnosticar tu problema. Por favor, intenta de nuevo cuando los hayas completado. Si aún así no puedes, podemos conectarte con un agente. Escribe *MENU* para volver al inicio.');
-        } else {
-            return fallBack('No entendí tu respuesta. Por favor, responde "Sí" o "No". Escribe *MENU* para volver al inicio.');
-        }
-    });
-
 
     /**
  * Esta función se conecta a una Google Sheet y lee los datos
@@ -351,10 +280,10 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
 
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣'))) {
             await state.update({ adminNumber: NUMERO_ADMIN_FONTANA });
-            return gotoFlow(flowRequestDNI);
+            return gotoFlow(flowInformarPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
-            return gotoFlow(flowMediosPagoFontana);
+            return gotoFlow(flowMediosPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
             return gotoFlow(flowConsultarPrecios);
@@ -375,10 +304,10 @@ const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_
 
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('1') || ctx.body.toLowerCase().includes('informar') || ctx.body.includes('1️⃣'))) {
             await state.update({ adminNumber: NUMERO_ADMIN_IBARRETA });
-            return gotoFlow(flowRequestDNI);
+            return gotoFlow(flowInformarPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
-            return gotoFlow(flowMediosPagoIbarreta);
+            return gotoFlow(flowMediosPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
             return gotoFlow(flowConsultarPrecios);
@@ -438,16 +367,13 @@ const main = async () => {
     const adapterFlow = createFlow([
         flowLlamarPersona,
         flowConsultarPrecios,
-        flowMediosPagoFontana,
-        flowMediosPagoIbarreta,
-        flowRequestDNI,
+        flowMediosPago,
         flowInformarPago,
         flowCargaArchivo,
         flowServicioTecnico,
         flowAtencionAdministrativaFontana,
         flowAtencionAdministrativaIbarreta,
         flowOtrasConsultas,
-        flowOtrasConsultasIbarreta,
         flowOtraZona,
         flowPrincipal
     ]);
