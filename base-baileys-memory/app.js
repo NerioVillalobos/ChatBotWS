@@ -243,6 +243,20 @@ const flowMediosPagoIbarreta = addKeyword('__MEDIOS_PAGO_IBARRETA__')
         return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
     });
 
+// Flujo de continuación para precios
+const flowConsultarPrecios_Part2 = addKeyword('__CONSULTAR_PRECIOS_PART2__')
+    .addAnswer('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente 📞 https://bit.ly/4l1iOvh')
+    .addAnswer(
+        '¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.',
+        { capture: true },
+        async (ctx, { gotoFlow, fallBack }) => {
+            if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
+                return gotoFlow(flowPrincipal);
+            }
+            return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+        }
+    );
+
 // Flujo para "Consultar precios de los servicios"
 const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes', 'costo'])
     .addAnswer(
@@ -258,45 +272,48 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
 
                 if (todosLosPlanes.length === 0) {
                     await flowDynamic('Lo siento, no pude obtener la información de los planes en este momento. Por favor, intenta de nuevo más tarde.');
-                } else {
-                    // Filtrar planes por número de fila y por zona (o si la zona es nula/vacía)
-                    const planesFiltrados = todosLosPlanes.filter(plan =>
-                        plan.rowNumber <= 56 &&
-                        ((plan.zona && plan.zona.toLowerCase() === lowerCaseZona) || !plan.zona)
-                    );
-
-                    if (planesFiltrados.length === 0) {
-                         await flowDynamic(`Lo siento, no encontré planes disponibles para la zona de ${zonaSeleccionada}.`);
-                    } else {
-                        const planesDeZona = planesFiltrados.filter(p => p.zona);
-                        const planesGenerales = planesFiltrados.filter(p => !p.zona);
-
-                        let mensajeFinal = '';
-
-                        if (planesDeZona.length > 0) {
-                            mensajeFinal += `*Planes para ${zonaSeleccionada.toUpperCase()}*\n`;
-                            planesDeZona.forEach(plan => {
-                                mensajeFinal += `• ${plan.tipoDeServicio}: *${plan.precio}*\n`;
-                            });
-                        }
-
-                        if (planesGenerales.length > 0) {
-                            mensajeFinal += `\n*Servicios Adicionales (para todas las zonas)*\n`;
-                            planesGenerales.forEach(plan => {
-                                mensajeFinal += `• ${plan.tipoDeServicio}: *${plan.precio}*\n`;
-                            });
-                        }
-
-                        await flowDynamic(mensajeFinal.trim());
-                    }
+                    return gotoFlow(flowEnd);
                 }
+
+                // Filtrar planes por número de fila y por zona (o si la zona es nula/vacía)
+                const planesFiltrados = todosLosPlanes.filter(plan =>
+                    plan.rowNumber <= 56 &&
+                    ((plan.zona && plan.zona.toLowerCase() === lowerCaseZona) || !plan.zona)
+                );
+
+                if (planesFiltrados.length === 0) {
+                        await flowDynamic(`Lo siento, no encontré planes disponibles para la zona de ${zonaSeleccionada}.`);
+                        return gotoFlow(flowEnd);
+                }
+
+                const planesDeZona = planesFiltrados.filter(p => p.zona);
+                const planesGenerales = planesFiltrados.filter(p => !p.zona);
+
+                let mensajeFinal = '';
+
+                if (planesDeZona.length > 0) {
+                    mensajeFinal += `*Planes para ${zonaSeleccionada.toUpperCase()}*\n`;
+                    planesDeZona.forEach(plan => {
+                        mensajeFinal += `• ${plan.tipoDeServicio}: *${plan.precio}*\n`;
+                    });
+                }
+
+                if (planesGenerales.length > 0) {
+                    mensajeFinal += `\n*Servicios Adicionales (para todas las zonas)*\n`;
+                    planesGenerales.forEach(plan => {
+                        mensajeFinal += `• ${plan.tipoDeServicio}: *${plan.precio}*\n`;
+                    });
+                }
+
+                await flowDynamic(mensajeFinal.trim());
+                await flowDynamic('_Los precios en este mensaje están sujetos a cambio sin previo aviso._');
+
             } catch (error) {
                 console.error('Error en el flujo de precios:', error);
                 await flowDynamic('Ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo más tarde.');
             }
 
-            await flowDynamic('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente 📞 https://bit.ly/4l1iOvh');
-            return gotoFlow(flowEnd);
+            return gotoFlow(flowConsultarPrecios_Part2);
         }
     );
 
@@ -542,6 +559,7 @@ const main = async () => {
         flowCargaArchivo,
         flowLlamarPersona,
         flowConsultarPrecios,
+        flowConsultarPrecios_Part2,
         flowMediosPagoFontana,
         flowMediosPagoIbarreta,
         flowPideNombre,
