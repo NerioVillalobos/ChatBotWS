@@ -252,21 +252,41 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
             try {
                 const myState = state.getMyState();
                 const zonaSeleccionada = myState.zona;
+                const lowerCaseZona = zonaSeleccionada.toLowerCase();
 
-                const planes = await getPreciosFromGoogleSheet();
+                const todosLosPlanes = await getPreciosFromGoogleSheet();
 
-                if (planes.length === 0) {
+                if (todosLosPlanes.length === 0) {
                     await flowDynamic('Lo siento, no pude obtener la información de los planes en este momento. Por favor, intenta de nuevo más tarde.');
                 } else {
-                    const planesFiltrados = planes.filter(plan => plan.zona.toLowerCase() === zonaSeleccionada.toLowerCase());
+                    // Filtrar planes por número de fila y por zona (o si la zona es nula/vacía)
+                    const planesFiltrados = todosLosPlanes.filter(plan =>
+                        plan.rowNumber <= 56 &&
+                        ((plan.zona && plan.zona.toLowerCase() === lowerCaseZona) || !plan.zona)
+                    );
 
                     if (planesFiltrados.length === 0) {
-                         await flowDynamic(`Lo siento, no encontré planes para la zona de ${zonaSeleccionada}.`);
+                         await flowDynamic(`Lo siento, no encontré planes disponibles para la zona de ${zonaSeleccionada}.`);
                     } else {
-                        let mensajeFinal = `*Planes para ${zonaSeleccionada.toUpperCase()}*\n\n`;
-                        planesFiltrados.forEach(plan => {
-                            mensajeFinal += `  - Tipo de servicio: ${plan.tipoDeServicio}\n    Precio: ${plan.precio}\n`;
-                        });
+                        const planesDeZona = planesFiltrados.filter(p => p.zona);
+                        const planesGenerales = planesFiltrados.filter(p => !p.zona);
+
+                        let mensajeFinal = '';
+
+                        if (planesDeZona.length > 0) {
+                            mensajeFinal += `*Planes para ${zonaSeleccionada.toUpperCase()}*\n`;
+                            planesDeZona.forEach(plan => {
+                                mensajeFinal += `• ${plan.tipoDeServicio}: *${plan.precio}*\n`;
+                            });
+                        }
+
+                        if (planesGenerales.length > 0) {
+                            mensajeFinal += `\n*Servicios Adicionales (para todas las zonas)*\n`;
+                            planesGenerales.forEach(plan => {
+                                mensajeFinal += `• ${plan.tipoDeServicio}: *${plan.precio}*\n`;
+                            });
+                        }
+
                         await flowDynamic(mensajeFinal.trim());
                     }
                 }
@@ -274,7 +294,7 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
                 console.error('Error en el flujo de precios:', error);
                 await flowDynamic('Ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo más tarde.');
             }
-            
+
             await flowDynamic('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente 📞 https://bit.ly/4l1iOvh');
             return gotoFlow(flowEnd);
         }
@@ -330,12 +350,30 @@ const getPreciosFromGoogleSheet = async () => {
             return [];
         }
 
+        // Determinar la columna de precios para el mes actual
+        const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+        const month = now.getMonth(); // 0-11
+        const year = now.getFullYear().toString().slice(-2); // "25" for 2025
+
+        const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+        const currentMonthName = monthNames[month];
+
+        // Formato de columna es "mes- yy", por ejemplo: "ago- 25"
+        const priceColumnName = `${currentMonthName}- ${year}`;
+
         const rows = await sheet.getRows();
-        const planes = rows.map((row) => ({
-            tipoDeServicio: row.get('Tipo de Servicio'), // Mapea a la columna 'Tipo de Servicio'
-            zona: row.get('Zona'),                     // Mapea a la columna 'Zona'
-            precio: row.get('Precio')                       // Mapea a la columna 'Precio'
-        }));
+        const planes = rows
+            .map((row) => {
+                const precio = row.get(priceColumnName);
+                return {
+                    // La primera columna es 'Planes', usamos un fallback a rawData por si el header cambia.
+                    tipoDeServicio: row.get('Planes') || row._rawData[0],
+                    zona: row.get('Zona'),
+                    precio: precio,
+                    rowNumber: row.rowNumber // Guardamos el número de fila para el filtro posterior
+                };
+            })
+            .filter(plan => plan.tipoDeServicio && plan.precio); // Filtrar planes sin nombre o sin precio para el mes actual
 
         return planes;
     } catch (error) {
