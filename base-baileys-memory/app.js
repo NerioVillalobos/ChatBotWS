@@ -245,46 +245,40 @@ const flowMediosPagoIbarreta = addKeyword('__MEDIOS_PAGO_IBARRETA__')
 
 // Flujo para "Consultar precios de los servicios"
 const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes', 'costo'])
-    .addAction(async (ctx, { flowDynamic, state }) => {
-        await flowDynamic('¡Claro! Aquí están nuestros planes y precios más recientes:');
-        try {
-            const myState = state.getMyState();
-            const zonaSeleccionada = myState.zona;
+    .addAnswer(
+        '¡Claro! Aquí están nuestros planes y precios más recientes:',
+        null,
+        async (ctx, { flowDynamic, state, gotoFlow }) => {
+            try {
+                const myState = state.getMyState();
+                const zonaSeleccionada = myState.zona;
 
-            const planes = await getPreciosFromGoogleSheet();
+                const planes = await getPreciosFromGoogleSheet();
 
-            if (planes.length === 0) {
-                await flowDynamic('Lo siento, no pude obtener la información de los planes en este momento. Por favor, intenta de nuevo más tarde.');
-                return;
+                if (planes.length === 0) {
+                    await flowDynamic('Lo siento, no pude obtener la información de los planes en este momento. Por favor, intenta de nuevo más tarde.');
+                } else {
+                    const planesFiltrados = planes.filter(plan => plan.zona.toLowerCase() === zonaSeleccionada.toLowerCase());
+
+                    if (planesFiltrados.length === 0) {
+                         await flowDynamic(`Lo siento, no encontré planes para la zona de ${zonaSeleccionada}.`);
+                    } else {
+                        let mensajeFinal = `*Planes para ${zonaSeleccionada.toUpperCase()}*\n\n`;
+                        planesFiltrados.forEach(plan => {
+                            mensajeFinal += `  - Tipo de servicio: ${plan.tipoDeServicio}\n    Precio: ${plan.precio}\n`;
+                        });
+                        await flowDynamic(mensajeFinal.trim());
+                    }
+                }
+            } catch (error) {
+                console.error('Error en el flujo de precios:', error);
+                await flowDynamic('Ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo más tarde.');
             }
-
-            // Filter planes by the selected zone
-            const planesFiltrados = planes.filter(plan => plan.zona.toLowerCase() === zonaSeleccionada.toLowerCase());
-
-            if (planesFiltrados.length === 0) {
-                 await flowDynamic(`Lo siento, no encontré planes para la zona de ${zonaSeleccionada}.`);
-                 return;
-            }
-
-            let mensajeFinal = `*Planes para ${zonaSeleccionada.toUpperCase()}*\n\n`;
-            planesFiltrados.forEach(plan => {
-                mensajeFinal += `  - Tipo de servicio: ${plan.tipoDeServicio}\n    Precio: ${plan.precio}\n`;
-            });
             
-            await flowDynamic(mensajeFinal.trim());
-
-        } catch (error) {
-            console.error('Error en el flujo de precios:', error);
-            await flowDynamic('Ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo más tarde.');
+            await flowDynamic('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente 📞 https://bit.ly/4l1iOvh');
+            return gotoFlow(flowEnd);
         }
-    })
-    .addAnswer('Si deseas contratar alguno de estos planes o tienes otras dudas, contáctanos directamente 📞 https://bit.ly/4l1iOvh')
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe MENU para volver a inicio.', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
-        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
-            return gotoFlow(flowPrincipal);
-        }
-        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
-    });
+    );
 
 // Flujo para "Otras Consultas" (Modificación para asegurar el retorno al menú)
 const flowOtrasConsultas = addKeyword(['otras_consultas'])
