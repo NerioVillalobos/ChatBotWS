@@ -38,6 +38,46 @@ try {
     console.error("Error reading or parsing creds.json:", err);
 }
 
+/**
+ * Verifica si la hora actual se encuentra dentro del horario comercial en Argentina.
+ * Horario comercial:
+ * - Lunes a Viernes: 07:00–12:29 y 16:00–23:59
+ * - Sábados: 09:00–11:59
+ * @returns {boolean} `true` si está dentro del horario comercial, `false` en caso contrario.
+ */
+const isWithinBusinessHours = () => {
+    // Obtener la fecha y hora actual en la zona horaria de Argentina
+    const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" }));
+    const day = now.getDay(); // Domingo: 0, Lunes: 1, ..., Sábado: 6
+    const hour = now.getHours();
+    const minutes = now.getMinutes();
+    const totalMinutes = hour * 60 + minutes;
+
+    // Lunes a Viernes (1 a 5)
+    if (day >= 1 && day <= 5) {
+        const morningStart = 7 * 60; // 07:00
+        const morningEnd = 12 * 60 + 29; // 12:29
+        const afternoonStart = 16 * 60; // 16:00
+        const afternoonEnd = 23 * 60 + 59; // 23:59
+
+        if ((totalMinutes >= morningStart && totalMinutes <= morningEnd) || (totalMinutes >= afternoonStart && totalMinutes <= afternoonEnd)) {
+            return true;
+        }
+    }
+
+    // Sábado (6)
+    if (day === 6) {
+        const saturdayStart = 9 * 60; // 09:00
+        const saturdayEnd = 11 * 60 + 59; // 11:59
+
+        if (totalMinutes >= saturdayStart && totalMinutes <= saturdayEnd) {
+            return true;
+        }
+    }
+
+    // Domingo (0) y fuera de los rangos de L-S
+    return false;
+};
 
 // Define los números de atención administrativa por localidad (NECESITAS REEMPLAZAR ESTOS VALORES)
 const NUMERO_ADMIN_FONTANA = '5491140638555@s.whatsapp.net'; // Ejemplo: reemplazar con el número real de WhatsApp del admin de Fontana
@@ -50,6 +90,11 @@ const NUMERO_TEST = '5491161726168@s.whatsapp.net';
 
 // Flujo para "Llama a una persona" (general, usado también para servicio técnico)
 const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas'])
+    .addAction(async (ctx, { flowDynamic }) => {
+        if (!isWithinBusinessHours()) {
+            await flowDynamic('En el caso de que se encuentre fuera de horario de atención será respondido una vez que se encuentre disponible una persona en horario comercial.');
+        }
+    })
     .addAnswer(['Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.','\nPor favor haga clic en el siguiente link:\n📞 https://bit.ly/4l1iOvh'])
     .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
@@ -59,19 +104,34 @@ const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'a
     });
 
 
-const flowInformarPago = addKeyword(['_informar_pago_'])
+const flowPideNombre = addKeyword('__PIDE_NOMBRE__')
     .addAnswer(
-        'Por favor, ingresa tu DNI/CUIT y tu Nombre y Apellido.',
+        'Gracias. Ahora, ingresá tu Nombre y Apellido.',
         { capture: true },
         async (ctx, { state, gotoFlow }) => {
-            await state.update({ customerInfo: ctx.body, mediaFiles: [] });
+            const myState = state.getMyState();
+            await state.update({ customerInfo: `DNI/CUIT: ${myState.dni}, Nombre y Apellido: ${ctx.body}`, mediaFiles: [] });
             return gotoFlow(flowCargaArchivo);
+        }
+    );
+
+const flowInformarPago = addKeyword(['_informar_pago_'])
+    .addAnswer(
+        'Por favor, ingresá tu DNI o CUIT.',
+        { capture: true },
+        async (ctx, { state, gotoFlow, fallBack }) => {
+            const dni = ctx.body.replace(/\D/g, ''); // Remove non-digits
+            if (!/^(\d{7,8}|\d{11})$/.test(dni)) {
+                return fallBack('El DNI o CUIT ingresado no es válido. Por favor, ingrésalo de nuevo. Debe tener 7 u 8 dígitos para DNI, u 11 para CUIT y contener solo números.');
+            }
+            await state.update({ dni: dni });
+            return gotoFlow(flowPideNombre);
         }
     );
 
 const flowCargaArchivo = addKeyword(['_carga_archivo_'])
     .addAnswer(
-        'Gracias. Ahora, por favor, carga el archivo con el recibo de pago realizado y escribe *LISTO* cuando ya culmines de enviar el archivo.',
+        '¡Gracias! Ahora, por favor, cargá el comprobante de pago recibido y escribí LISTO cuando termines.',
         { capture: true },
         async (ctx, { provider, state, endFlow, fallBack }) => {
             const { customerInfo, mediaFiles } = state.getMyState();
@@ -141,23 +201,42 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
     );
 
 
-// Flujo para "Conocer los medios de pago"
-const flowMediosPago = addKeyword(['medios_pago', 'pagos', 'como pagar', 'donde pago'])
-    .addAnswer('Puedes realizar tus pagos a través de los siguientes medios:', { delay: 500 })
+const flowMediosPagoFontana = addKeyword('__MEDIOS_PAGO_FONTANA__')
     .addAnswer(
-        '• Pago en línea: [Link al Portal de Pagos]\n' +
-        '• Transferencia bancaria:\n' +
-        '   *VANGUARD INTERNET SRL*\n' +
-        '   CUIT: 30716576376\n' +
-        '   CBU: 0170304520000031123901\n' +
-        '   ALIAS: VANGUARD.INTERNET\n' +
-        '• Pagar en el local de Fontana: *Av. San Martín 1628*\n',
-        null,
-        async (ctx, { flowDynamic }) => {
-            await flowDynamic('Recuerda incluir tu número de cliente en la referencia.');
-        }
+        [
+            'Podés realizar tus pagos a través de los siguientes medios:',
+            '• Transferencia bancaria:',
+            'VANGUARD INTERNET SRL',
+            'CUIT: 30716576376',
+            'CBU: 0170304520000031123901',
+            'ALIAS: VANGUARD.INTERNET',
+            '• Pagar en el local de Fontana: Av. San Martín 1628',
+            '',
+            'Recordá incluir tu número de DNI en la referencia.'
+        ].join('\n')
     )
-    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe *MENU* para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe MENU para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
+            return gotoFlow(flowPrincipal);
+        }
+        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+    });
+
+const flowMediosPagoIbarreta = addKeyword('__MEDIOS_PAGO_IBARRETA__')
+    .addAnswer(
+        [
+            'Podés realizar tus pagos a través de los siguientes medios:',
+            '• Transferencia bancaria:',
+            'VANGUARD INTERNET SRL',
+            'CUIT: 30716576376',
+            'CBU: 0170304520000031123901',
+            'ALIAS: VANGUARD.INTERNET',
+            '• Pagar en el local de Ibarreta: Gral. San Martín 489',
+            '',
+            'Recordá incluir tu número de DNI en la referencia.'
+        ].join('\n')
+    )
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe MENU para volver al inicio.', { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
@@ -208,6 +287,11 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
 
 // Flujo para "Otras Consultas" (Modificación para asegurar el retorno al menú)
 const flowOtrasConsultas = addKeyword(['otras_consultas'])
+    .addAction(async (ctx, { flowDynamic }) => {
+        if (!isWithinBusinessHours()) {
+            await flowDynamic('En el caso de que se encuentre fuera de horario de atención será respondido una vez que se encuentre disponible una persona en horario comercial.');
+        }
+    })
     .addAnswer('Perfecto! Lo derivamos con una persona de atención para resolver sus dudas.', null, async (ctx, { flowDynamic }) => {
         await flowDynamic('Por favor haga clic en el siguiente link: 📞 https://bit.ly/4l1iOvh');
     })
@@ -275,12 +359,15 @@ const getPreciosFromGoogleSheet = async () => {
 const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo internet', 'soporte'])
     .addAnswer('¡Importante! Antes de continuar, por favor, realiza estos pasos:')
     .addAnswer('• Reinicia tu router o equipo.\n• Verifica los cables y la alimentación eléctrica.\n• Confirma que realizaste estos pasos.', { delay: 1000 })
-    .addAnswer('¿Ya realizaste estos pasos? (Sí/No)', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+    .addAnswer('¿Ya realizaste estos pasos? (Sí/No)', { capture: true }, async (ctx, { gotoFlow, fallBack, flowDynamic }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
 
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí'))) {
+            if (!isWithinBusinessHours()) {
+                await flowDynamic('En el caso de que se encuentre fuera de horario de atención será respondido una vez que se encuentre disponible una persona en horario comercial.');
+            }
             return gotoFlow(flowLlamarPersona);
         } else if (ctx.body && typeof ctx.body === 'string' && ctx.body.toLowerCase().includes('no')) {
             return fallBack('Es fundamental que realices estos pasos para poder diagnosticar tu problema. Por favor, intenta de nuevo cuando los hayas completado. Si aún así no puedes, podemos conectarte con un agente. Escribe *MENU* para volver al inicio.');
@@ -301,7 +388,7 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
             return gotoFlow(flowInformarPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
-            return gotoFlow(flowMediosPago);
+            return gotoFlow(flowMediosPagoFontana);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
             await state.update({ zona: 'Fontana' });
@@ -312,6 +399,27 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
         }
         // Cambio aquí: si no se reconoce la respuesta, se mantiene en el flujo.
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2, 3 o 4, o los emojis 1️⃣, 2️⃣, 3️⃣, 4️⃣). Escribe *MENU* para volver al inicio.');
+    });
+
+const flowServicioTecnicoIbarreta = addKeyword('__SERVICIO_TECNICO_IBARRETA__')
+    .addAnswer('¡Importante! Antes de continuar, por favor, realiza estos pasos:')
+    .addAnswer('• Reiniciá tu router o equipo.\n• Verificá el cable y la alimentación eléctrica.')
+    .addAnswer('¿Confirmas que realizaste estos pasos? (Sí/No)', { capture: true }, async (ctx, { gotoFlow, fallBack, flowDynamic }) => {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
+            return gotoFlow(flowPrincipal);
+        }
+
+        if (ctx.body && typeof ctx.body === 'string' && (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí'))) {
+            if (!isWithinBusinessHours()) {
+                await flowDynamic('En el caso de que se encuentre fuera de horario de atención será respondido una vez que se encuentre disponible una persona en horario comercial.');
+            }
+            await flowDynamic('¡Perfecto! Lo derivamos con una persona de soporte técnico para evacuar sus dudas. Por favor haga clic en el siguiente link: https://bit.ly/4l1iOvh');
+            return gotoFlow(flowEnd);
+        } else if (ctx.body && typeof ctx.body === 'string' && ctx.body.toLowerCase().includes('no')) {
+            return fallBack('Es fundamental que realices estos pasos para poder diagnosticar tu problema. Por favor, intenta de nuevo cuando los hayas completado. Si aún así no puedes, podemos conectarte con un agente. Escribe *MENU* para volver al inicio.');
+        } else {
+            return fallBack('No entendí tu respuesta. Por favor, responde "Sí" o "No". Escribe *MENU* para volver al inicio.');
+        }
     });
 
 const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_ibarreta'])
@@ -326,14 +434,14 @@ const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_
             return gotoFlow(flowInformarPago);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('2') || ctx.body.toLowerCase().includes('medios') || ctx.body.includes('2️⃣'))) {
-            return gotoFlow(flowMediosPago);
+            return gotoFlow(flowMediosPagoIbarreta);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('3') || ctx.body.toLowerCase().includes('precios') || ctx.body.toLowerCase().includes('planes') || ctx.body.includes('3️⃣'))) {
             await state.update({ zona: 'Ibarreta' });
             return gotoFlow(flowConsultarPrecios);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
-            return gotoFlow(flowOtrasConsultas);
+            return gotoFlow(flowServicioTecnicoIbarreta);
         }
         return fallBack('No entendí tu respuesta. Por favor, elige una opción válida (1, 2, 3 o 4, o los emojis 1️⃣, 2️⃣, 3️⃣, 4️⃣). Escribe *MENU* para volver al inicio.');
     });
@@ -348,6 +456,14 @@ const flowOtraZona = addKeyword(['otra_zona'])
         return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
     });
 
+
+const flowEnd = addKeyword('__FLOW_END__')
+    .addAnswer('¿Hay algo más en lo que pueda ayudarte?\nEscribe MENU para volver al inicio.', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+        if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
+            return gotoFlow(flowPrincipal);
+        }
+        return fallBack('No entendí tu respuesta. Si deseas explorar otras opciones, escribe *MENU* para volver al inicio.');
+    });
 
 // ----------------------------------------------------
 // FLUJO PRINCIPAL (Punto de entrada del bot)
@@ -393,14 +509,17 @@ const main = async () => {
         flowCargaArchivo,
         flowLlamarPersona,
         flowConsultarPrecios,
-        flowMediosPago,
+        flowMediosPagoFontana,
+        flowMediosPagoIbarreta,
+        flowPideNombre,
         flowInformarPago,
-        flowCargaArchivo,
         flowServicioTecnico,
+        flowServicioTecnicoIbarreta,
         flowAtencionAdministrativaFontana,
         flowAtencionAdministrativaIbarreta,
         flowOtrasConsultas,
         flowOtraZona,
+        flowEnd,
         flowPrincipal
     ]);
     const adapterProvider = createProvider(BaileysProvider);
