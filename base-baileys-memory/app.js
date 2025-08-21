@@ -161,6 +161,9 @@ const getText = (key, variables = {}) => {
     return text;
 };
 
+// Cargar textos antes de definir los flujos del bot
+await loadTextsFromSheet();
+
 // --- Flujos del Bot ---
 
 // Flujo para "Llama a una persona" (general, usado también para servicio técnico)
@@ -464,7 +467,6 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
 
 // --- Función Principal ---
 const main = async () => {
-    await loadTextsFromSheet(); // Cargar textos antes de iniciar el bot
     const adapterDB = new MockAdapter();
     const adapterFlow = createFlow([
         flowCargaArchivo,
