@@ -122,9 +122,18 @@ const loadTextsFromSheet = async () => {
         const textData = {};
         rows.forEach(row => {
             const id = row.get('ID_TEXTO');
-            const text = row.get('TEXTO');
+            let text = row.get('TEXTO');
             if (id && text) {
-                textData[id] = text.replace(/\\n/g, '\n').replace(/<br>/g, '\n');
+                // Normalizar saltos de línea y eliminar comillas innecesarias
+                text = text.trim();
+                if (text.startsWith('"') && text.endsWith('"')) {
+                    text = text.slice(1, -1);
+                }
+                text = text
+                    .replace(/\r\n/g, '\n')
+                    .replace(/\\n/g, '\n')
+                    .replace(/<br>/gi, '\n');
+                textData[id] = text;
             }
         });
         BOT_TEXTS = textData;
