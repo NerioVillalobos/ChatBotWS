@@ -164,13 +164,19 @@ const getText = (key, variables = {}) => {
 // Cargar textos antes de definir los flujos del bot
 await loadTextsFromSheet();
 
+// Envía el aviso de fuera de horario junto con el horario de atención
+const sendOutOfHoursMessage = async (flowDynamic) => {
+    await flowDynamic(getText('aviso_fuera_de_horario'));
+    await flowDynamic(getText('horario_atencion'));
+};
+
 // --- Flujos del Bot ---
 
 // Flujo para "Llama a una persona" (general, usado también para servicio técnico)
 const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas'])
     .addAction(async (ctx, { flowDynamic }) => {
         if (!isWithinBusinessHours()) {
-            await flowDynamic(getText('aviso_fuera_de_horario'));
+            await sendOutOfHoursMessage(flowDynamic);
         }
     })
     .addAnswer(getText('derivacion_generica'))
@@ -322,7 +328,7 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
 const flowOtrasConsultas = addKeyword(['otras_consultas'])
     .addAction(async (ctx, { flowDynamic }) => {
         if (!isWithinBusinessHours()) {
-            await flowDynamic(getText('aviso_fuera_de_horario'));
+            await sendOutOfHoursMessage(flowDynamic);
         }
     })
     .addAnswer(getText('derivacion_generica'))
@@ -345,7 +351,7 @@ const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo interne
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí'))) {
             if (!isWithinBusinessHours()) {
-                await flowDynamic(getText('aviso_fuera_de_horario'));
+                await sendOutOfHoursMessage(flowDynamic);
             }
             return gotoFlow(flowLlamarPersona);
         } else if (ctx.body && typeof ctx.body === 'string' && ctx.body.toLowerCase().includes('no')) {
@@ -388,7 +394,7 @@ const flowServicioTecnicoIbarreta = addKeyword('__SERVICIO_TECNICO_IBARRETA__')
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí'))) {
             if (!isWithinBusinessHours()) {
-                await flowDynamic(getText('aviso_fuera_de_horario'));
+                await sendOutOfHoursMessage(flowDynamic);
             }
             await flowDynamic(getText('tecnico_derivacion_ibarreta'));
             return gotoFlow(flowEnd);

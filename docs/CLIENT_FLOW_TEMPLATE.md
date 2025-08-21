@@ -14,6 +14,7 @@ Los textos que el bot enviará se gestionan desde una hoja de Google Sheets llam
 | ID_TEXTO | TEXTO |
 |----------|-------|
 | saludo_inicial | ¡Hola! Soy el ChatBot ... |
+| horario_atencion | Nuestro horario de atención es de lunes a viernes de 07:00 a 12:29 y de 16:00 a 23:59, y los sábados de 09:00 a 11:59. |
 | ... | ... |
 
 **Instrucciones:**
