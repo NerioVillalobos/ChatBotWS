@@ -379,7 +379,7 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
             return gotoFlow(flowConsultarPrecios);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.includes('4') || ctx.body.toLowerCase().includes('otras') || ctx.body.includes('4️⃣'))) {
-            return gotoFlow(flowOtrasConsultas);
+            return gotoFlow(flowServicioTecnico);
         }
         return fallBack(getText('fallback_menu_admin'));
     });
@@ -387,8 +387,7 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
 const flowServicioTecnicoIbarreta = addKeyword('__SERVICIO_TECNICO_IBARRETA__')
     .addAnswer(getText('tecnico_aviso_pasos'))
     .addAnswer(getText('tecnico_lista_pasos').replace('Reinicia', 'Reiniciá').replace('Verifica', 'Verificá'))
-    .addAnswer(getText('tecnico_pregunta_pasos').replace('realizaste', 'realizaste estos pasos? (Sí/No)')) // Little hacky
-    .addAnswer(null, { capture: true }, async (ctx, { gotoFlow, fallBack, flowDynamic }) => {
+    .addAnswer(getText('tecnico_pregunta_pasos'), { capture: true }, async (ctx, { gotoFlow, fallBack, flowDynamic }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
         }
