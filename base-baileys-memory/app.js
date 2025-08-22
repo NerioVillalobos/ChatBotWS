@@ -350,10 +350,11 @@ const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo interne
             return gotoFlow(flowPrincipal);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí'))) {
-            if (!isWithinBusinessHours()) {
+            if (isWithinBusinessHours()) {
+                await flowDynamic(getText('tecnico_derivacion_fontana'));
+            } else {
                 await sendOutOfHoursMessage(flowDynamic);
             }
-            await flowDynamic(getText('tecnico_derivacion_fontana'));
             return gotoFlow(flowEnd);
         } else if (ctx.body && typeof ctx.body === 'string' && ctx.body.toLowerCase().includes('no')) {
             return fallBack(getText('tecnico_error_no_pasos'));
@@ -393,10 +394,11 @@ const flowServicioTecnicoIbarreta = addKeyword('__SERVICIO_TECNICO_IBARRETA__')
             return gotoFlow(flowPrincipal);
         }
         if (ctx.body && typeof ctx.body === 'string' && (ctx.body.toLowerCase().includes('si') || ctx.body.toLowerCase().includes('sí'))) {
-            if (!isWithinBusinessHours()) {
+            if (isWithinBusinessHours()) {
+                await flowDynamic(getText('tecnico_derivacion_ibarreta'));
+            } else {
                 await sendOutOfHoursMessage(flowDynamic);
             }
-            await flowDynamic(getText('tecnico_derivacion_ibarreta'));
             return gotoFlow(flowEnd);
         } else if (ctx.body && typeof ctx.body === 'string' && ctx.body.toLowerCase().includes('no')) {
             return fallBack(getText('tecnico_error_no_pasos'));
