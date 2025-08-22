@@ -54,11 +54,9 @@ const isWithinBusinessHours = () => {
 
     // Lunes a Viernes (1 a 5)
     if (day >= 1 && day <= 5) {
-        const morningStart = 7 * 60;
-        const morningEnd = 12 * 60 + 29;
-        const afternoonStart = 16 * 60;
-        const afternoonEnd = 23 * 60 + 59;
-        if ((totalMinutes >= morningStart && totalMinutes <= morningEnd) || (totalMinutes >= afternoonStart && totalMinutes <= afternoonEnd)) {
+        const weekdayStart = 7 * 60;
+        const weekdayEnd = 23 * 60 + 59;
+        if (totalMinutes >= weekdayStart && totalMinutes <= weekdayEnd) {
             return true;
         }
     }
