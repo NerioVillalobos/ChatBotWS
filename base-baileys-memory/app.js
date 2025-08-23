@@ -24,6 +24,7 @@ const __dirname = dirname(__filename);
 const SPREADSHEET_ID = '1x071H-KoQ7eM8xNpyNDLA7yJ_evG1wfQRnHOeFLvdNY';
 const PRICES_SHEET_TITLE = 'ChatBot-Precios';
 const TEXT_SHEET_TITLE = 'Setup-Texto';
+const LOG_SHEET_TITLE = 'bot-registros';
 let BOT_TEXTS = {};
 let creds = {};
 try {
@@ -147,6 +148,30 @@ const loadTextsFromSheet = async () => {
     }
 };
 
+/**
+ * Registra un paso del usuario en la hoja de cálculo de logs.
+ */
+const logInteraction = async (ctx, step) => {
+    try {
+        const serviceAccountAuth = new JWT({ email: creds.client_email, key: creds.private_key, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
+        const doc = new GoogleSpreadsheet(SPREADSHEET_ID, serviceAccountAuth);
+        await doc.loadInfo();
+        const sheet = doc.sheetsByTitle[LOG_SHEET_TITLE];
+        if (!sheet) {
+            console.error(`Error: No se encontró la hoja con el título "${LOG_SHEET_TITLE}"`);
+            return;
+        }
+        const dateTime = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+        await sheet.addRow({
+            Fecha: dateTime,
+            Telefono: ctx.from,
+            Flujo: step,
+        });
+    } catch (error) {
+        console.error('Error al registrar interacción:', error);
+    }
+};
+
 
 /**
  * Obtiene un texto y reemplaza las variables.
@@ -178,6 +203,7 @@ const sendOutOfHoursMessage = async (flowDynamic) => {
 // Flujo para "Llama a una persona" (general, usado también para servicio técnico)
 const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'agente', 'hablar con alguien', 'otras consultas'])
     .addAction(async (ctx, { flowDynamic }) => {
+        await logInteraction(ctx, 'flowLlamarPersona');
         if (!isWithinBusinessHours()) {
             await sendOutOfHoursMessage(flowDynamic);
         }
@@ -191,6 +217,9 @@ const flowLlamarPersona = addKeyword(['llamar_persona', 'llamar', 'contacto', 'a
     });
 
 const flowPideNombre = addKeyword('__PIDE_NOMBRE__')
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowPideNombre');
+    })
     .addAnswer(getText('pago_pedir_nombre'), { capture: true }, async (ctx, { state, gotoFlow }) => {
         const myState = state.getMyState();
         await state.update({ customerInfo: `DNI/CUIT: ${myState.dni}, Nombre y Apellido: ${ctx.body}`, mediaFiles: [] });
@@ -198,6 +227,9 @@ const flowPideNombre = addKeyword('__PIDE_NOMBRE__')
     });
 
 const flowInformarPago = addKeyword(['_informar_pago_'])
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowInformarPago');
+    })
     .addAnswer(getText('pago_pedir_dni_cuit'), { capture: true }, async (ctx, { state, gotoFlow, fallBack }) => {
         const dni = ctx.body.replace(/\D/g, '');
         if (!/^(\d{7,8}|\d{11})$/.test(dni)) {
@@ -208,6 +240,9 @@ const flowInformarPago = addKeyword(['_informar_pago_'])
     });
 
 const flowCargaArchivo = addKeyword(['_carga_archivo_'])
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowCargaArchivo');
+    })
     .addAnswer(getText('pago_pedir_comprobante'), { capture: true }, async (ctx, { provider, state, endFlow, fallBack }) => {
         const { customerInfo, mediaFiles } = state.getMyState();
         const messageBody = (ctx.body && typeof ctx.body === 'string') ? ctx.body.toUpperCase().trim() : '';
@@ -254,6 +289,9 @@ const flowCargaArchivo = addKeyword(['_carga_archivo_'])
     });
 
 const flowMediosPagoFontana = addKeyword('__MEDIOS_PAGO_FONTANA__')
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowMediosPagoFontana');
+    })
     .addAnswer(getText('medios_pago_fontana'))
     .addAnswer(getText('pregunta_algo_mas'), { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
@@ -263,6 +301,9 @@ const flowMediosPagoFontana = addKeyword('__MEDIOS_PAGO_FONTANA__')
     });
 
 const flowMediosPagoIbarreta = addKeyword('__MEDIOS_PAGO_IBARRETA__')
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowMediosPagoIbarreta');
+    })
     .addAnswer(getText('medios_pago_ibarreta'))
     .addAnswer(getText('pregunta_algo_mas'), { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
@@ -272,6 +313,9 @@ const flowMediosPagoIbarreta = addKeyword('__MEDIOS_PAGO_IBARRETA__')
     });
 
 const flowConsultarPrecios_Part2 = addKeyword('__CONSULTAR_PRECIOS_PART2__')
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowConsultarPrecios_Part2');
+    })
     .addAnswer(getText('pregunta_algo_mas'), { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
@@ -280,6 +324,9 @@ const flowConsultarPrecios_Part2 = addKeyword('__CONSULTAR_PRECIOS_PART2__')
     });
 
 const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes', 'costo'])
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowConsultarPrecios');
+    })
     .addAnswer(getText('precios_intro'), null, async (ctx, { flowDynamic, state, gotoFlow }) => {
         try {
             const myState = state.getMyState();
@@ -330,6 +377,7 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
 
 const flowOtrasConsultas = addKeyword(['otras_consultas'])
     .addAction(async (ctx, { flowDynamic }) => {
+        await logInteraction(ctx, 'flowOtrasConsultas');
         if (!isWithinBusinessHours()) {
             await sendOutOfHoursMessage(flowDynamic);
         }
@@ -346,6 +394,9 @@ const flowOtrasConsultas = addKeyword(['otras_consultas'])
     });
 
 const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo internet', 'soporte'])
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowServicioTecnico');
+    })
     .addAnswer(getText('tecnico_aviso_pasos'))
     .addAnswer(getText('tecnico_lista_pasos'), { delay: 1000 })
     .addAnswer(getText('tecnico_pregunta_pasos'), { capture: true }, async (ctx, { gotoFlow, fallBack, flowDynamic }) => {
@@ -367,6 +418,9 @@ const flowServicioTecnico = addKeyword(['tecnico', 'problema', 'no tengo interne
     });
 
 const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_fontana'])
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowAtencionAdministrativaFontana');
+    })
     .addAnswer(getText('menu_admin_fontana_pregunta'), { delay: 500 })
     .addAnswer(getText('menu_admin_opciones'), { capture: true }, async (ctx, { gotoFlow, fallBack, state }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
@@ -390,6 +444,9 @@ const flowAtencionAdministrativaFontana = addKeyword(['atencion_administrativa_f
     });
 
 const flowServicioTecnicoIbarreta = addKeyword('__SERVICIO_TECNICO_IBARRETA__')
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowServicioTecnicoIbarreta');
+    })
     .addAnswer(getText('tecnico_aviso_pasos'))
     .addAnswer(getText('tecnico_lista_pasos').replace('Reinicia', 'Reiniciá').replace('Verifica', 'Verificá'))
     .addAnswer(getText('tecnico_pregunta_pasos'), { capture: true }, async (ctx, { gotoFlow, fallBack, flowDynamic }) => {
@@ -411,6 +468,9 @@ const flowServicioTecnicoIbarreta = addKeyword('__SERVICIO_TECNICO_IBARRETA__')
     });
 
 const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_ibarreta'])
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowAtencionAdministrativaIbarreta');
+    })
     .addAnswer(getText('menu_admin_ibarreta_pregunta'), { delay: 500 })
     .addAnswer(getText('menu_admin_opciones'), { capture: true }, async (ctx, { gotoFlow, fallBack, state }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
@@ -434,6 +494,9 @@ const flowAtencionAdministrativaIbarreta = addKeyword(['atencion_administrativa_
     });
 
 const flowOtraZona = addKeyword(['otra_zona'])
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowOtraZona');
+    })
     .addAnswer(getText('otra_zona_info'))
     .addAnswer(getText('otra_zona_contacto'))
     .addAnswer(getText('pregunta_algo_mas'), { delay: 1000, capture: true }, async (ctx, { gotoFlow, fallBack }) => {
@@ -444,6 +507,9 @@ const flowOtraZona = addKeyword(['otra_zona'])
     });
 
 const flowEnd = addKeyword('__FLOW_END__')
+    .addAction(async (ctx) => {
+        await logInteraction(ctx, 'flowEnd');
+    })
     .addAnswer(getText('pregunta_algo_mas'), { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
@@ -456,6 +522,7 @@ const flowPrincipal = addKeyword(['hola', 'ole', 'alo', 'buenos dias', 'buenas t
         const userPhone = ctx.from;
         const dateTime = new Date().toLocaleString('es-ES', { timeZone: 'America/Argentina/Buenos_Aires' });
         console.log(`[NUEVA INTERACCIÓN] De: ${userPhone} a las ${dateTime}`);
+        await logInteraction(ctx, 'flowPrincipal');
     })
     .addAnswer(getText('saludo_inicial'), { delay: 500 })
     .addAnswer(getText('menu_principal_pregunta'), { delay: 500 })
