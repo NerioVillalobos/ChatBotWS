@@ -154,20 +154,20 @@ const loadTextsFromSheet = async () => {
 const ensureLogSheetHeader = async (sheet) => {
     try {
         await sheet.loadHeaderRow();
-    } catch {
-        // Si no existe fila de encabezados, la cargamos por defecto
-        await sheet.setHeaderRow(['Fecha', 'Telefono', 'Flujo']);
-        return;
-    }
-    if (!sheet.headerValues || sheet.headerValues.length === 0 || sheet.headerValues[0] === undefined) {
-        await sheet.setHeaderRow(['Fecha', 'Telefono', 'Flujo']);
+        if (!sheet.headerValues || sheet.headerValues.length === 0 || sheet.headerValues[0] === undefined) {
+            await sheet.setHeaderRow(['Fecha', 'Telefono', 'Flujo']);
+        }
+        return true;
+    } catch (error) {
+        console.error('No se pudo validar el encabezado de la hoja de logs:', error);
+        return false;
     }
 };
 
-/**
- * Registra un paso del usuario en la hoja de cálculo de logs.
- */
-const logInteraction = async (ctx, step) => {
+let logSheet = null;
+let loggingEnabled = true;
+
+const initLogSheet = async () => {
     try {
         const serviceAccountAuth = new JWT({ email: creds.client_email, key: creds.private_key, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
         const doc = new GoogleSpreadsheet(SPREADSHEET_ID, serviceAccountAuth);
@@ -175,17 +175,38 @@ const logInteraction = async (ctx, step) => {
         const sheet = doc.sheetsByTitle[LOG_SHEET_TITLE];
         if (!sheet) {
             console.error(`Error: No se encontró la hoja con el título "${LOG_SHEET_TITLE}"`);
+            loggingEnabled = false;
             return;
         }
-        await ensureLogSheetHeader(sheet);
+        const ok = await ensureLogSheetHeader(sheet);
+        if (!ok) {
+            loggingEnabled = false;
+            return;
+        }
+        logSheet = sheet;
+    } catch (error) {
+        console.error('No se pudo inicializar la hoja de logs:', error);
+        loggingEnabled = false;
+    }
+};
+
+/**
+ * Registra un paso del usuario en la hoja de cálculo de logs.
+ */
+const logInteraction = async (ctx, step) => {
+    if (!loggingEnabled || !logSheet) return;
+    try {
         const dateTime = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
-        await sheet.addRow({
+        await logSheet.addRow({
             Fecha: dateTime,
             Telefono: ctx.from,
             Flujo: step,
         });
     } catch (error) {
         console.error('Error al registrar interacción:', error);
+        if (error?.response?.status === 403) {
+            loggingEnabled = false;
+        }
     }
 };
 
@@ -208,6 +229,7 @@ const getText = (key, variables = {}) => {
 
 // Cargar textos antes de definir los flujos del bot
 await loadTextsFromSheet();
+await initLogSheet();
 
 // Envía el aviso de fuera de horario junto con el horario de atención
 const sendOutOfHoursMessage = async (flowDynamic) => {
