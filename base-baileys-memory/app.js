@@ -149,13 +149,14 @@ const loadTextsFromSheet = async () => {
 };
 
 /**
- * Ensure the logging worksheet has the expected header row.
+ * Verifica que la hoja de logs tenga un encabezado válido.
  */
-const ensureLogSheetHeader = async (sheet) => {
+const verifyLogSheetHeader = async (sheet) => {
     try {
         await sheet.loadHeaderRow();
         if (!sheet.headerValues || sheet.headerValues.length === 0 || sheet.headerValues[0] === undefined) {
-            await sheet.setHeaderRow(['Fecha', 'Telefono', 'Flujo']);
+            console.error('Hoja de logs sin encabezado válido; deshabilitando logging.');
+            return false;
         }
         return true;
     } catch (error) {
@@ -178,7 +179,7 @@ const initLogSheet = async () => {
             loggingEnabled = false;
             return;
         }
-        const ok = await ensureLogSheetHeader(sheet);
+        const ok = await verifyLogSheetHeader(sheet);
         if (!ok) {
             loggingEnabled = false;
             return;
