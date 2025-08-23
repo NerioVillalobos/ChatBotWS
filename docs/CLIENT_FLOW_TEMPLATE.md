@@ -48,7 +48,14 @@ Describe los menús y las transiciones entre mensajes. Se sugiere utilizar una s
 ## 5. Recursos Adicionales
 - Enlaces a logos, imágenes u otros recursos que deba enviar el bot.
 
-## 6. Aprobación
+## 6. Registro de Interacciones
+Si deseas llevar estadísticas de uso, crea una pestaña adicional llamada `bot-registros` en la hoja de cálculo y asegúrate de que la primera fila contenga las columnas:
+
+| Fecha | Telefono | Flujo |
+
+El bot agregará automáticamente una fila por cada paso que realice el usuario.
+
+## 7. Aprobación
 > Firma y fecha del cliente indicando que la información es correcta y puede implementarse.
 
 ---

@@ -111,7 +111,7 @@ const getPreciosFromGoogleSheet = async () => {
 
 /**
  * Carga todos los textos estáticos del bot desde la hoja de cálculo.
- */
+*/
 const loadTextsFromSheet = async () => {
     try {
         const serviceAccountAuth = new JWT({ email: creds.client_email, key: creds.private_key, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
@@ -149,6 +149,16 @@ const loadTextsFromSheet = async () => {
 };
 
 /**
+ * Ensure the logging worksheet has the expected header row.
+ */
+const ensureLogSheetHeader = async (sheet) => {
+    await sheet.loadHeaderRow();
+    if (!sheet.headerValues || sheet.headerValues.length === 0 || sheet.headerValues[0] === undefined) {
+        await sheet.setHeaderRow(['Fecha', 'Telefono', 'Flujo']);
+    }
+};
+
+/**
  * Registra un paso del usuario en la hoja de cálculo de logs.
  */
 const logInteraction = async (ctx, step) => {
@@ -161,6 +171,7 @@ const logInteraction = async (ctx, step) => {
             console.error(`Error: No se encontró la hoja con el título "${LOG_SHEET_TITLE}"`);
             return;
         }
+        await ensureLogSheetHeader(sheet);
         const dateTime = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
         await sheet.addRow({
             Fecha: dateTime,
