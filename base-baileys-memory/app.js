@@ -267,7 +267,6 @@ const flowMediosPagoIbarreta = addKeyword('__MEDIOS_PAGO_IBARRETA__')
     });
 
 const flowConsultarPrecios_Part2 = addKeyword('__CONSULTAR_PRECIOS_PART2__')
-    .addAnswer(getText('precios_link_contratar'))
     .addAnswer(getText('pregunta_algo_mas'), { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
         if (ctx.body && typeof ctx.body === 'string' && ctx.body.toUpperCase().includes('MENU')) {
             return gotoFlow(flowPrincipal);
@@ -316,6 +315,7 @@ const flowConsultarPrecios = addKeyword(['consultar_precios', 'precios', 'planes
             }
             await flowDynamic(mensajeFinal.trim());
             await flowDynamic(getText('precios_disclaimer'));
+            await flowDynamic(getText('precios_link_contratar'));
         } catch (error) {
             console.error('Error en el flujo de precios:', error);
             await flowDynamic(getText('precios_error_fetch'));
