@@ -152,7 +152,13 @@ const loadTextsFromSheet = async () => {
  * Ensure the logging worksheet has the expected header row.
  */
 const ensureLogSheetHeader = async (sheet) => {
-    await sheet.loadHeaderRow();
+    try {
+        await sheet.loadHeaderRow();
+    } catch {
+        // Si no existe fila de encabezados, la cargamos por defecto
+        await sheet.setHeaderRow(['Fecha', 'Telefono', 'Flujo']);
+        return;
+    }
     if (!sheet.headerValues || sheet.headerValues.length === 0 || sheet.headerValues[0] === undefined) {
         await sheet.setHeaderRow(['Fecha', 'Telefono', 'Flujo']);
     }
